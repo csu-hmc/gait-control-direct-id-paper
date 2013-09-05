@@ -17,19 +17,18 @@ stop = 3000
 
 data = walk.WalkingData(obinna.iloc[start:stop].copy())
 
-data.differentiate(['RKneeFlexion.Ang'], ['RKneeFlexion.Rat'])
+data.time_derivative(['RKneeFlexion.Ang'], ['RKneeFlexion.Rat'])
 
 data.grf_landmarks('FP2.ForY', 'FP1.ForY', threshold=28.0)
 
 right_steps = data.split_at('right', num_samples=10)
 axes = data.plot_steps('FP2.ForY', linestyle='-', marker='o')
-plt.show()
 
 sensors = ['RKneeFlexion.Ang', 'RKneeFlexion.Rat']
-controls = ['RKneeFlexion.Mom']
+controls = ['RKneeFlexion.Mom', 'RHipFlexion.Mom']
 solver = walk.SimpleControlSolver(right_steps, sensors, controls)
 gains, sensors = solver.solve()
 
-plt.plot(gains.reshape(gains.shape[0], gains.shape[1] * gains.shape[2]), '.-')
+solver.plot_gains(gains)
 
 plt.show()
