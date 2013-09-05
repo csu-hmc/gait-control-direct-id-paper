@@ -27,7 +27,12 @@ axes = data.plot_steps('FP2.ForY', linestyle='-', marker='o')
 sensors = ['RKneeFlexion.Ang', 'RKneeFlexion.Rat']
 controls = ['RKneeFlexion.Mom', 'RHipFlexion.Mom']
 solver = walk.SimpleControlSolver(right_steps, sensors, controls)
+
 gains, sensors = solver.solve()
+
+solver.plot_gains(gains)
+
+gains, sensors = solver.solve(sparse_a=True)
 
 solver.plot_gains(gains)
 
