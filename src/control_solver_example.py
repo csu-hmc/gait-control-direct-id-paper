@@ -28,12 +28,11 @@ sensors = ['RKneeFlexion.Ang', 'RKneeFlexion.Rat']
 controls = ['RKneeFlexion.Mom', 'RHipFlexion.Mom']
 solver = walk.SimpleControlSolver(right_steps, sensors, controls)
 
-gains, sensors = solver.solve()
+gains, controls, variance, gain_var, control_var, estimated_controls = \
+    solver.solve()
 
-solver.plot_gains(gains)
+solver.plot_gains(gains, gain_var)
 
-gains, sensors = solver.solve(sparse_a=True)
-
-solver.plot_gains(gains)
+solver.plot_estimated_vs_measure_controls(estimated_controls, variance)
 
 plt.show()
