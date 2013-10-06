@@ -32,7 +32,7 @@ data.time_derivative(angles, rates)
 
 data.grf_landmarks('FP2.ForY', 'FP1.ForY', threshold=28.0)
 
-right_steps = data.split_at('right', num_samples=50)
+right_steps = data.split_at('right', num_samples=15)
 axes = data.plot_steps('FP2.ForY', linestyle='-', marker='o')
 
 controls = ['RKneeFlexion.Mom',
@@ -43,12 +43,12 @@ sensors = ['RKneeFlexion.Ang',
            'LKneeFlexion.Ang',
            'LKneeFlexion.Rate']
 
-
 solver = walk.SimpleControlSolver(right_steps, sensors, controls)
 
 gain_omission_matrix = np.ones((len(controls), len(sensors))).astype(bool)
 gain_omission_matrix[0, 2:] = False
 gain_omission_matrix[1, :2] = False
+#gain_omission_matrix = None
 
 gains, controls, variance, gain_var, control_var, estimated_controls = \
     solver.solve(gain_omission_matrix=gain_omission_matrix)
@@ -56,5 +56,7 @@ gains, controls, variance, gain_var, control_var, estimated_controls = \
 solver.plot_gains(gains, gain_var)
 
 solver.plot_estimated_vs_measure_controls(estimated_controls, variance)
+
+solver.plot_control_contributions(estimated_controls)
 
 plt.show()
