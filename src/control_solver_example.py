@@ -33,7 +33,10 @@ data.time_derivative(angles, rates)
 data.grf_landmarks('FP2.ForY', 'FP1.ForY', threshold=28.0)
 
 right_steps = data.split_at('right', num_samples=15)
-axes = data.plot_steps('FP2.ForY', linestyle='-', marker='o')
+data.plot_steps('FP2.ForY', 'RKneeFlexion.Ang', 'RKneeFlexion.Rate',
+                'RKneeFlexion.Mom', linestyle='-', marker='o')
+data.plot_steps('FP2.ForY', 'RKneeFlexion.Ang', 'RKneeFlexion.Rate',
+                'RKneeFlexion.Mom', mean=True)
 
 controls = ['RKneeFlexion.Mom',
             'LKneeFlexion.Mom']
