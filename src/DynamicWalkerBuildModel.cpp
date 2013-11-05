@@ -31,6 +31,43 @@ int main()
 
 		osimModel.addBody(platform);
 
+		// Connect the platform to the ground
+		Vec3 locationInParent(0.0, 0.0, 0.0);
+		Vec3 orientationInParent(0.0, 0.0, 0.0);
+		Vec3 locationInChild(0.0, 0.0, 0.0);
+		Vec3 orientationInChild(0.0, 0.0, 0.0);
+		PinJoint *platformToGround = new PinJoint("PlatformToGround", ground, locationInParent, orientationInParent, *platform, locationInChild, orientationInChild, false);
+
+		CoordinateSet &platformJoints = platformToGround->upd_CoordinateSet();
+		platformJoints[0].setName("platform_rz");
+		double rotRangePlatform[2] = {-Pi / 2.0, 0};
+		platformJoints[0].setRange(rotRangePlatform);
+		platformJoints[0].setDefaultValue(convertDegreesToRadians(-10.0));
+		platformJoints[0].setDefaultLocked(true);
+
+		// Pelvis
+		double pelvisMass = 1;
+		Vec3 pelvisCoM(0.0, 0.0, 0.0);
+		Inertia pelvisInertia(1.0, 1.0, 1.0, 0.0, 0.0, 0.0);
+
+		OpenSim::Body* pelvis = new OpenSim::Body("Pelvis", pelvisMass, pelvisCoM, pelvisInertia);
+
+		locationInParent = Vec3(0.0, 0.0, 0.0);
+		orientationInParent = Vec3(0.0, 0.0, 0.0);
+		locationInChild = Vec3(0.0, 0.0, 0.0);
+		orientationInChild = Vec3(0.0, 0.0, 0.0);
+
+		FreeJoint *pelvisToPlatform = new FreeJoint("PelvisToPlatform", *platform,
+				locationInParent, orientationInParent, *pelvis, locationInChild,
+				orientationInChild, false);
+
+		CoordinateSet &pelvisJointCoords = pelvisToPlatform->upd_CoordinateSet();
+
+		pelvis->addDisplayGeometry("sphere.vtp");
+		pelvis->updDisplayer()->setScaleFactors(Vec3(pelvisWidth / 2.0, pelvisWidth / 2.0, pelvisWidth));
+
+		osimModel.addBody(pelvis);
+
 		// Print XML version of the model
 		osimModel.print("DynamicWalkerModel.osim");
 	}
