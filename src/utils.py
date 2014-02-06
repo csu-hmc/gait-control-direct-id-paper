@@ -1,5 +1,34 @@
+#/usr/bin/env python
 
-def add_negative_columns(data, axis):
+from os.path import join
+
+
+def trial_file_paths(trials_dir, trial_number):
+    """
+
+    Parameters
+    ==========
+    trials_dir : string
+        The path to the main directory for the data. This directory should
+        contain subdirectories: `T001/`, `T002/`, etc.
+    trial_number : string
+        Three digit trial number, e.g. `005`.
+
+    """
+
+    trial_dir = 'T' + trial_number
+    mocap_file = 'mocap-' + trial_number + '.txt'
+    record_file = 'record-' + trial_number + '.txt'
+    meta_file = 'meta-' + trial_number + '.yml'
+
+    mocap_file_path = join(trials_dir, trial_dir, mocap_file)
+    record_file_path = join(trials_dir, trial_dir, record_file)
+    meta_file_path = join(trials_dir, trial_dir, meta_file)
+
+    return mocap_file_path, record_file_path, meta_file_path
+
+
+def add_negative_columns(data, axis, inv_dyn_labels):
     """Creates new columns in the DataFrame for any D-Flow measurements in
     the Z axis.
 
@@ -23,7 +52,7 @@ def add_negative_columns(data, axis):
         for label in label_set:
             if axis in label:
                 new_label = 'Negative' + label
-                data.raw_data[new_label] = -data.raw_data[label]
+                data[new_label] = -data[label]
             else:
                 new_label = label
             new_label_set.append(new_label)
