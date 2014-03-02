@@ -1,70 +1,53 @@
 #/usr/bin/env python
 
-import pandas
-from gaitanalysis import motek, gait
+import matplotlib.pyplot as plt
 
-from utils import trial_file_paths, add_negative_columns
+import utils
 
+"""Trials:
 
-root_data_directory = "/home/moorepants/Data/human-gait/gait-control-identification"
+    0.8 m/s: 16, 19, 25
 
+    1.2 m/s: 17, 20, 26
 
-def prep_for_control_analysis(trials_dir, trial_number):
+    1.6 m/s: 18, 21, 27
 
-    file_paths = trial_file_paths(trials_dir, trial_number)
+"""
 
-    cleaned_data_path = '../data/cleaned-data-' + trial_number + '.h5'
+trial_number = '031'
 
-    try:
-        f = open(cleaned_data_path)
-    except IOError:
-        dflow_data = motek.DFlowData(*file_paths)
-        dflow_data.clean_data(interpolate_markers=True)
+# Found these by l
+sample_bounds = {'016': (110, 149),
+                 '017': (95, 118),
+                 '018': (82, 110),
+                 '019': (96, 115),  # no bad steps
+                 '020': (80, 105),  # lots of bad steps, may need to change threshold/filter
+                 '021': (75, 115),  # this one has lots and lots of bad steps, needs work
+                 '025': (100, 124),  # no bad steps
+                 '026': (80, 110),
+                 '027': (60, 100),  # lots of bad steps
+                 '031': (0, 200),
+                 }
 
-        # 'TreadmillPerturbation' is the current name of the longitudinal
-        # perturbation trials. This returns a data frame of processed data.
-        perturbation_data_frame = \
-            dflow_data.extract_processed_data(event='TreadmillPerturbation',
-                                              index_col='TimeStamp')
+#for trial_number in sample_bounds.keys():
 
-        perturbation_data_frame.to_hdf(cleaned_data_path, 'table')
-    else:
-        f.close()
-        perturbation_data_frame = pandas.read_hdf(cleaned_data_path, 'table')
+event_data_frame, subject_mass, event_data_path = \
+    utils.write_event_data_frame_to_disk(trial_number)
 
-    processed_data_path = '../data/processed-data-' + trial_number + '.h5'
+walking_data, walking_data_path = \
+    utils.write_inverse_dynamics_to_disk(event_data_frame, subject_mass,
+                                        event_data_path)
 
-    # Here I compute the joint angles, rates, and torques, which all are
-    # low pass filtered.
-    inv_dyn_low_pass_cutoff = 6.0  # Hz
-    inv_dyn_labels = motek.markers_for_2D_inverse_dynamics()
-    new_inv_dyn_labels = add_negative_columns(perturbation_data_frame, 'Z',
-                                              inv_dyn_labels)
+steps, walking_data = \
+    utils.section_signals_into_steps(walking_data, walking_data_path,
+                                    num_samples_lower_bound=sample_bounds[trial_number][0],
+                                    num_samples_upper_bound=sample_bounds[trial_number][1])
 
-    perturbation_data = gait.WalkingData(perturbation_data_frame)
+sensor_labels, control_labels, result, solver = \
+    utils.find_joint_isolated_controller(steps, event_data_path)
 
-    dflow_data = motek.DFlowData(*file_paths)
-    args = new_inv_dyn_labels + [dflow_data.meta['subject']['mass'],
-                                 inv_dyn_low_pass_cutoff]
+fig, axes = utils.plot_joint_isolated_gains(sensor_labels, control_labels,
+                                            result[0], result[3])
 
-    try:
-        f = open(processed_data_path)
-    except IOError:
-
-        perturbation_data.inverse_dynamics_2d(*args)
-
-        perturbation_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
-                                        filter_frequency=15.0,
-                                        threshold=30.0, min_time=290.0)
-
-        perturbation_data.split_at('right', num_samples=20,
-                                   belt_speed_column='RightBeltSpeed')
-
-        # TODO :  Remove all steps that don't have a similar cadence.
-
-        perturbation_data.save(processed_data_path)
-    else:
-        f.close()
-        perturbation_data = gait.WalkingData(processed_data_path)
-
-    return perturbation_data, args
+fig.savefig('../figures/gains-' + trial_number + '.png', dpi=300)
+    #plt.show()
