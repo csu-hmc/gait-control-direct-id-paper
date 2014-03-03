@@ -11,6 +11,7 @@ from gaitanalysis import motek
 from gaitanalysis.gait import WalkingData
 from gaitanalysis.controlid import SimpleControlSolver
 from gaitanalysis.utils import _percent_formatter
+from dtk.process import coefficient_of_determination
 
 
 def trial_file_paths(trials_dir, trial_number):
@@ -153,7 +154,7 @@ def write_event_data_frame_to_disk(trial_number,
 
     subject_mass = get_subject_mass(file_paths[2])
 
-    print('{} s'.format(time.clock() - start))
+    print('{:1.2f} s'.format(time.clock() - start))
 
     return event_data_frame, subject_mass, event_data_path
 
@@ -191,7 +192,7 @@ def write_inverse_dynamics_to_disk(data_frame, subject_mass,
         f.close()
         walking_data = WalkingData(walking_data_path)
 
-    print('{} s'.format(time.time() - start))
+    print('{:1.2f} s'.format(time.time() - start))
 
     return walking_data, walking_data_path
 
@@ -207,13 +208,13 @@ def section_signals_into_steps(walking_data, walking_data_path,
         start = time.clock()
         walking_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
                                    filter_frequency=15.0, threshold=30.0)
-        print('{} s'.format(time.clock() - start))
+        print('{:1.2f} s'.format(time.clock() - start))
 
         print('Spliting the data into steps.')
         start = time.clock()
         walking_data.split_at('right', num_samples=20,
                               belt_speed_column='RightBeltSpeed')
-        print('{} s'.format(time.clock() - start))
+        print('{:1.2f} s'.format(time.clock() - start))
 
         walking_data.save(walking_data_path)
 
@@ -223,12 +224,12 @@ def section_signals_into_steps(walking_data, walking_data_path,
         getem()
     else:
         f.close()
-        print('Loading pre-computed steps.')
         start = time.clock()
         walking_data = WalkingData(walking_data_path)
         if not hasattr(walking_data, 'steps'):
             getem()
         else:
+            print('Loading pre-computed steps.')
             print(time.clock() - start)
 
     # Remove bad steps based on # samples in each step.
@@ -245,6 +246,7 @@ def section_signals_into_steps(walking_data, walking_data_path,
 def find_joint_isolated_controller(steps, event_data_path):
     # Controller identification.
 
+    event = '-'.join(event_data_path[:-3].split('-')[-2:])
     gain_data_h5_path = event_data_path.replace('cleaned-data', 'gain-data')
     gain_data_npz_path = os.path.splitext(gain_data_h5_path)[0] + '.npz'
 
@@ -272,8 +274,13 @@ def find_joint_isolated_controller(steps, event_data_path):
                 'Left.Knee.PlantarFlexion.Moment',
                 'Left.Hip.PlantarFlexion.Moment']
 
-    # TODO : make the validation data only be an 1/4 or 8th of the data.
-    solver = SimpleControlSolver(steps, sensors, controls)
+    # Use the first 3/4 of the steps to compute the gains and validate on
+    # the last 1/4. Most runs seem to be about 500 steps.
+    num_steps = steps.shape[0]
+    solver = SimpleControlSolver(steps.iloc[:num_steps * 3 / 4],
+                                 sensors,
+                                 controls,
+                                 validation_data=steps.iloc[num_steps * 3 / 4:])
 
     # Limit to angles and rates from one joint can only affect the moment at
     # that joint.
@@ -281,12 +288,16 @@ def find_joint_isolated_controller(steps, event_data_path):
     for i, row in enumerate(gain_omission_matrix):
         row[2 * i:2 * i + 2] = True
 
-    result = solver.solve(gain_omission_matrix=gain_omission_matrix)
-
-    # TODO : Save result to disk so recomputation isn't needed.
-    """
-    np.savez(gain_data_npz_path, *result[:-1])
-    results[-1].to_hdf(gain_data_h5_path, event)
+    try:
+        f = open(gain_data_h5_path)
+        f.close()
+        f = open(gain_data_npz_path)
+    except IOError:
+        result = solver.solve(gain_omission_matrix=gain_omission_matrix)
+        # first items are numpy arrays
+        np.savez(gain_data_npz_path, *result[:-1])
+        # the last item is a panel
+        result[-1].to_hdf(gain_data_h5_path, event)
     else:
         f.close()
         with np.load(gain_data_npz_path) as npz:
@@ -295,20 +306,26 @@ def find_joint_isolated_controller(steps, event_data_path):
                       npz['arr_2'],
                       npz['arr_3'],
                       npz['arr_4']]
-        result.append(pandas.read_hdf(event_data_path, event)
-    """
+        result.append(pandas.read_hdf(gain_data_h5_path, event))
+        solver.gain_omission_matrix = gain_omission_matrix
 
-    print('{} s'.format(time.clock() - start))
+    print('{:1.2f} s'.format(time.clock() - start))
 
     return sensors, controls, result, solver
 
 
 def plot_joint_isolated_gains(sensor_labels, control_labels, gains,
-                              gains_variance):
+                              gains_variance, axes=None, show_std=True,
+                              linestyle='-'):
 
     print('Generating gain plot.')
 
-    fig, axes = plt.subplots(3, 2, sharex=True)
+    start = time.clock()
+
+    if axes is None:
+        fig, axes = plt.subplots(3, 2, sharex=True)
+    else:
+        fig = axes[0, 0].figure
 
     for i, row in enumerate(['Ankle', 'Knee', 'Hip']):
         for j, (col, unit) in enumerate(zip(['Angle', 'Rate'],
@@ -346,17 +363,19 @@ def plot_joint_isolated_gains(sensor_labels, control_labels, gains,
                     gains_per = gains_per[sort_idx]
                     sigma = sigma[sort_idx]
 
-                axes[i, j].fill_between(percent_of_gait_cycle,
-                                        gains_per - sigma,
-                                        gains_per + sigma,
-                                        alpha=0.5,
-                                        color=color)
+                if show_std:
+                    axes[i, j].fill_between(percent_of_gait_cycle,
+                                            gains_per - sigma,
+                                            gains_per + sigma,
+                                            alpha=0.5,
+                                            color=color)
 
                 axes[i, j].plot(percent_of_gait_cycle, gains_per,
                                 marker='o',
                                 ms=2,
                                 color=color,
-                                label=side)
+                                label=side,
+                                linestyle=linestyle)
 
                 #axes[i, j].set_title(' '.join(col_label.split('.')[1:]))
                 axes[i, j].set_title(r"{}: {} $\rightarrow$ Moment".format(row, col))
@@ -368,4 +387,118 @@ def plot_joint_isolated_gains(sensor_labels, control_labels, gains,
                     axes[i, j].xaxis.set_major_formatter(_percent_formatter)
                     axes[i, j].set_xlim(xlim)
 
+    leg = axes[0, 0].legend(('Right', 'Left'), loc='best', fancybox=True,
+                            fontsize=8)
+    leg.get_frame().set_alpha(0.75)
+
+    print('{:1.2f} s'.format(time.clock() - start))
+
+    plt.tight_layout()
+
     return fig, axes
+
+
+def variance_accounted_for(estimated_panel, validation_panel, controls):
+    """Returns a dictionary of R^2 values for each control."""
+
+    estimated_walking = pandas.concat([df for k, df in
+                                       estimated_panel.iteritems()],
+                                      ignore_index=True)
+
+    actual_walking = pandas.concat([df for k, df in
+                                    validation_panel.iteritems()],
+                                   ignore_index=True)
+
+    vafs = {}
+
+    for i, control in enumerate(controls):
+        measured = actual_walking[control].values
+        predicted = estimated_walking[control].values
+        r_squared = coefficient_of_determination(measured, predicted)
+        vafs[control] = r_squared
+
+    return vafs
+
+
+def plot_validation(estimated_controls, continuous, vafs):
+    print('Generating validation plot.')
+    start = time.clock()
+    # get the first and last time of the estimated controls (10 steps)
+    beg_first_step = estimated_controls.iloc[0]['Original Time'][0]
+    end_last_step = estimated_controls.iloc[9]['Original Time'][-1]
+    period = continuous[beg_first_step:end_last_step]
+
+    # make plot for right and left legs
+    fig, axes = plt.subplots(3, 2, sharex=True)
+
+    moments = ['Ankle.PlantarFlexion.Moment',
+               'Knee.PlantarFlexion.Moment',
+               'Hip.PlantarFlexion.Moment']
+
+    for j, side in enumerate(['Right', 'Left']):
+        for i, moment in enumerate(moments):
+            m = '.'.join([side, moment])
+            axes[i, j].plot(period.index.values.astype(float),
+                            period[m].values, color='black')
+
+            est_x = []
+            est_y = []
+            for null, step in estimated_controls.iteritems():
+                est_x.append(step['Original Time'].values)
+                est_y.append(step[m].values)
+
+            axes[i, j].plot(np.hstack(est_x), np.hstack(est_y), '.',
+                            color='blue')
+
+            axes[i, j].legend(('Measured',
+                               'Estimated {:1.1%}'.format(vafs[m])), fontsize=8)
+
+            if j == 0:
+                axes[i, j].set_ylabel(moment.split('.')[0] + ' Torque [Nm]')
+
+            if j == 1:
+                axes[i, j].get_yaxis().set_ticks([])
+
+    for i, m in enumerate(moments):
+        adjacent = (period['Right.' + m].values, period['Left.' + m].values)
+        axes[i, 0].set_ylim((np.max(np.hstack(adjacent)),
+                             np.min(np.hstack(adjacent))))
+        axes[i, 1].set_ylim((np.max(np.hstack(adjacent)),
+                             np.min(np.hstack(adjacent))))
+
+    axes[0, 0].set_xlim((beg_first_step, end_last_step))
+
+    axes[0, 0].set_title('Right Leg')
+    axes[0, 1].set_title('Left Leg')
+
+    axes[-1, 0].set_xlabel('Time [s]')
+    axes[-1, 1].set_xlabel('Time [s]')
+
+    plt.tight_layout()
+
+    print('{:1.2f} s'.format(time.clock() - start))
+
+    return fig, axes
+
+
+def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains):
+
+    data_dir = tmp_data_dir()
+
+    all_gains = np.zeros((len(trial_numbers), num_gains, len(controls),
+                          len(sensors)))
+
+    for i, trial_number in enumerate(trial_numbers):
+        file_name = 'gain-data-{}-longitudinal-perturbation.npz'.format(trial_number)
+        gain_data_npz_path = os.path.join(data_dir, file_name)
+        with np.load(gain_data_npz_path) as npz:
+            # n, q, p
+            all_gains[i] = npz['arr_0']
+            # TODO : use proper uncertainties to compute errorbars
+            #gain_var = npz['arr_3']
+
+    # compute the mean and var
+    mean_gains = all_gains.mean(axis=0)
+    var_gains = all_gains.var(axis=0)
+
+    return mean_gains, var_gains
