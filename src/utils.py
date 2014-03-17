@@ -114,6 +114,35 @@ def trial_data_dir(default='.'):
     return trials_dir
 
 
+def generate_meta_data_table(trials_dir):
+
+    trial_dirs = [x[0] for x in os.walk(trials_dir)]
+
+    keys_i_want = ['id', 'subject-id', 'datetime', 'notes', 'nominal-speed']
+
+    data = {}
+    for k in keys_i_want:
+        data.setdefault(k, [])
+
+    for directory in trial_dirs:
+        try:
+            f = open(os.path.join(directory,
+                                  'meta-{}.yml'.format(directory[-3:])))
+        except IOError:
+            pass
+        else:
+            meta_data = yaml.load(f)
+            trial_dic = meta_data['trial']
+
+            for key in keys_i_want:
+                try:
+                    data[key].append(trial_dic[key])
+                except KeyError:
+                    data[key].append(np.nan)
+
+    return pandas.DataFrame(data)
+
+
 def get_subject_mass(meta_file_path):
 
     with open(meta_file_path) as f:
@@ -254,25 +283,25 @@ def find_joint_isolated_controller(steps, event_data_path):
 
     start = time.clock()
 
-    sensors = ['Right.Ankle.Flexion.Angle',
-               'Right.Ankle.Flexion.Rate',
+    sensors = ['Right.Ankle.PlantarFlexion.Angle',
+               'Right.Ankle.PlantarFlexion.Rate',
                'Right.Knee.Flexion.Angle',
                'Right.Knee.Flexion.Rate',
                'Right.Hip.Flexion.Angle',
                'Right.Hip.Flexion.Rate',
-               'Left.Ankle.Flexion.Angle',
-               'Left.Ankle.Flexion.Rate',
+               'Left.Ankle.PlantarFlexion.Angle',
+               'Left.Ankle.PlantarFlexion.Rate',
                'Left.Knee.Flexion.Angle',
                'Left.Knee.Flexion.Rate',
                'Left.Hip.Flexion.Angle',
                'Left.Hip.Flexion.Rate']
 
     controls = ['Right.Ankle.PlantarFlexion.Moment',
-                'Right.Knee.PlantarFlexion.Moment',
-                'Right.Hip.PlantarFlexion.Moment',
+                'Right.Knee.Flexion.Moment',
+                'Right.Hip.Flexion.Moment',
                 'Left.Ankle.PlantarFlexion.Moment',
-                'Left.Knee.PlantarFlexion.Moment',
-                'Left.Hip.PlantarFlexion.Moment']
+                'Left.Knee.Flexion.Moment',
+                'Left.Hip.Flexion.Moment']
 
     # Use the first 3/4 of the steps to compute the gains and validate on
     # the last 1/4. Most runs seem to be about 500 steps.
@@ -327,15 +356,17 @@ def plot_joint_isolated_gains(sensor_labels, control_labels, gains,
     else:
         fig = axes[0, 0].figure
 
-    for i, row in enumerate(['Ankle', 'Knee', 'Hip']):
+    for i, (row, sign) in enumerate(zip(['Ankle', 'Knee', 'Hip'],
+                                        ['PlantarFlexion', 'Flexion',
+                                         'Flexion'])):
         for j, (col, unit) in enumerate(zip(['Angle', 'Rate'],
                                             ['Nm/rad', r'Nm $\cdot$ s/rad'])):
             for side, marker, color in zip(['Right', 'Left'],
                                            ['o', 'o'],
                                            ['Blue', 'Red']):
 
-                row_label = '.'.join([side, row, 'PlantarFlexion.Moment'])
-                col_label = '.'.join([side, row, 'Flexion', col])
+                row_label = '.'.join([side, row, sign + '.Moment'])
+                col_label = '.'.join([side, row, sign, col])
 
                 gain_row_idx = control_labels.index(row_label)
                 gain_col_idx = sensor_labels.index(col_label)
