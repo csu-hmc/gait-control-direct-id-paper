@@ -271,17 +271,7 @@ def section_signals_into_steps(walking_data, walking_data_path,
 
     return walking_data.steps.iloc[mid_values.index], walking_data
 
-
-def find_joint_isolated_controller(steps, event_data_path):
-    # Controller identification.
-
-    event = '-'.join(event_data_path[:-3].split('-')[-2:])
-    gain_data_h5_path = event_data_path.replace('cleaned-data', 'gain-data')
-    gain_data_npz_path = os.path.splitext(gain_data_h5_path)[0] + '.npz'
-
-    print('Identifying the controller.')
-
-    start = time.clock()
+def load_sensors_and_controls():
 
     sensors = ['Right.Ankle.PlantarFlexion.Angle',
                'Right.Ankle.PlantarFlexion.Rate',
@@ -302,6 +292,22 @@ def find_joint_isolated_controller(steps, event_data_path):
                 'Left.Ankle.PlantarFlexion.Moment',
                 'Left.Knee.Flexion.Moment',
                 'Left.Hip.Flexion.Moment']
+
+    return sensors, controls
+
+
+def find_joint_isolated_controller(steps, event_data_path):
+    # Controller identification.
+
+    event = '-'.join(event_data_path[:-3].split('-')[-2:])
+    gain_data_h5_path = event_data_path.replace('cleaned-data', 'gain-data')
+    gain_data_npz_path = os.path.splitext(gain_data_h5_path)[0] + '.npz'
+
+    print('Identifying the controller.')
+
+    start = time.clock()
+
+    sensors, controls = load_sensors_and_controls()
 
     # Use the first 3/4 of the steps to compute the gains and validate on
     # the last 1/4. Most runs seem to be about 500 steps.
@@ -463,8 +469,8 @@ def plot_validation(estimated_controls, continuous, vafs):
     fig, axes = plt.subplots(3, 2, sharex=True)
 
     moments = ['Ankle.PlantarFlexion.Moment',
-               'Knee.PlantarFlexion.Moment',
-               'Hip.PlantarFlexion.Moment']
+               'Knee.Flexion.Moment',
+               'Hip.Flexion.Moment']
 
     for j, side in enumerate(['Right', 'Left']):
         for i, moment in enumerate(moments):
