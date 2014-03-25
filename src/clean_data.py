@@ -37,11 +37,11 @@ for trial_number in sample_bounds.keys():
     print(msg)
     print('=' * len(msg))
 
-    event_data_frame, subject_mass, event_data_path = \
+    event_data_frame, meta_data, event_data_path = \
         utils.write_event_data_frame_to_disk(trial_number)
 
     walking_data, walking_data_path = \
-        utils.write_inverse_dynamics_to_disk(event_data_frame, subject_mass,
+        utils.write_inverse_dynamics_to_disk(event_data_frame, meta_data,
                                              event_data_path)
 
     steps, walking_data = \

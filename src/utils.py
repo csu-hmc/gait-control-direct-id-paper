@@ -151,6 +151,22 @@ def get_subject_mass(meta_file_path):
     return subject_mass
 
 
+def get_marker_set(meta_file_path):
+
+    with open(meta_file_path) as f:
+        marker_set_label = yaml.load(f)['trial']['marker-set']
+
+    return marker_set_label
+
+
+def load_meta_data(meta_file_path):
+
+    with open(meta_file_path) as f:
+        meta_data = yaml.load(f)
+
+    return meta_data
+
+
 def write_event_data_frame_to_disk(trial_number,
                                    event='Longitudinal Perturbation'):
 
@@ -181,14 +197,14 @@ def write_event_data_frame_to_disk(trial_number,
         f.close()
         event_data_frame = pandas.read_hdf(event_data_path, event)
 
-    subject_mass = get_subject_mass(file_paths[2])
+    meta_data = load_meta_data(file_paths[2])
 
     print('{:1.2f} s'.format(time.clock() - start))
 
-    return event_data_frame, subject_mass, event_data_path
+    return event_data_frame, meta_data, event_data_path
 
 
-def write_inverse_dynamics_to_disk(data_frame, subject_mass,
+def write_inverse_dynamics_to_disk(data_frame, meta_data,
                                    event_data_path,
                                    inv_dyn_low_pass_cutoff=6.0):
     """Computes inverse kinematics and dynamics writes to disk."""
@@ -206,11 +222,14 @@ def write_inverse_dynamics_to_disk(data_frame, subject_mass,
         print('Computing the inverse dynamics.')
         # Here I compute the joint angles, rates, and torques, which all are
         # low pass filtered.
-        inv_dyn_labels = motek.markers_for_2D_inverse_dynamics()
+        marker_set = meta_data['trial']['marker-set']
+        inv_dyn_labels = \
+            motek.markers_for_2D_inverse_dynamics(marker_set=marker_set)
         new_inv_dyn_labels = add_negative_columns(data_frame, 'Z',
                                                   inv_dyn_labels)
         walking_data = WalkingData(data_frame)
 
+        subject_mass = meta_data['subject']['mass']
         args = new_inv_dyn_labels + [subject_mass, inv_dyn_low_pass_cutoff]
 
         walking_data.inverse_dynamics_2d(*args)
@@ -270,6 +289,7 @@ def section_signals_into_steps(walking_data, walking_data_path,
     mid_values = lower_values[valid]
 
     return walking_data.steps.iloc[mid_values.index], walking_data
+
 
 def load_sensors_and_controls():
 
