@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas
 import yaml
+from scipy.optimize import curve_fit
 from gaitanalysis import motek
 from gaitanalysis.gait import WalkingData
 from gaitanalysis.controlid import SimpleControlSolver
@@ -248,7 +249,8 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
 def section_signals_into_steps(walking_data, walking_data_path,
                                filter_frequency=15.0, threshold=30.0,
                                num_samples_lower_bound=53,
-                               num_samples_upper_bound=132):
+                               num_samples_upper_bound=132,
+                               num_samples=20):
     """Computes inverse kinematics and dynamics and sections into steps."""
 
     def getem():
@@ -260,7 +262,7 @@ def section_signals_into_steps(walking_data, walking_data_path,
 
         print('Spliting the data into steps.')
         start = time.clock()
-        walking_data.split_at('right', num_samples=20,
+        walking_data.split_at('right', num_samples=num_samples,
                               belt_speed_column='RightBeltSpeed')
         print('{:1.2f} s'.format(time.clock() - start))
 
@@ -559,3 +561,71 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains):
     var_gains = all_gains.var(axis=0)
 
     return mean_gains, var_gains
+
+
+def fourier_series(omega):
+    """Returns a function that evaluates an nth order Fourier series at the
+    given the base frequency.
+
+    Parameters
+    ----------
+    omega : float
+        Base frequency in rad/s.
+
+    """
+
+    def f(x, *coeffs):
+        """Returns the value of the Fourier series at x given the
+        coefficients.
+
+        y(x) = a_0 + \sum_{i=1}^n [ a_i * cos(n omega x) + b_i sin(n w x)]
+
+        Parameters
+        ----------
+        x : array_like
+            The values of the independent variable.
+        coeffs: array_like, shape(2 * n + 2,)
+            The coefficients must be passed in as such:
+            For n = 1, coeffs = (a0, a1, b1)
+            For n = 2, coeffs = (a0, a1, a2, b1, b2)
+
+        Returns
+        -------
+        y : ndarray
+            The values of the dependent variable.
+
+        """
+
+        a0 = coeffs[0]
+        remaining_coeffs = coeffs[1:]
+        the_as = remaining_coeffs[:len(remaining_coeffs) / 2]
+        the_bs = remaining_coeffs[len(remaining_coeffs) / 2:]
+
+        y = a0
+
+        for i, (a, b) in enumerate(zip(the_as, the_bs)):
+            y += (a * np.cos((i + 1) * omega * x) +
+                  b * np.sin((i + 1) * omega * x))
+
+        return y
+
+    return f
+
+
+def fit_fourier(x, y, p0, omega, **kwargs):
+    """
+
+    Parameters
+    ----------
+    x : array_like
+    y : array_like
+    p0 : array_like
+        Initial coefficient guess.
+    omega : float
+        Estimated flaot
+    Kwargs : optional
+        Passed to curve_fit.
+
+    """
+    f = fourier_series(omega)
+    return curve_fit(f, x, y, p0=p0, **kwargs)
