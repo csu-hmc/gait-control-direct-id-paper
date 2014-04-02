@@ -402,18 +402,23 @@ def plot_joint_isolated_gains(sensor_labels, control_labels, gains,
                 gains_per = gains[:, gain_row_idx, gain_col_idx]
                 sigma = np.sqrt(gains_variance[:, gain_row_idx, gain_col_idx])
 
-                percent_of_gait_cycle = np.linspace(0.0, 1.0, num=gains.shape[0])
+                percent_of_gait_cycle = np.linspace(0.0,
+                                                    1.0 - 1.0 / gains.shape[0],
+                                                    num=gains.shape[0])
 
-                xlim = (percent_of_gait_cycle[0], percent_of_gait_cycle[-1])
+                xlim = (0.0, 1.0)
 
                 if side == 'Left':
                     # Shift that diggidty-dogg signal 50%
-                    # This only works for an even number of samples.
-                    if len(percent_of_gait_cycle) % 2 != 0:
-                        raise StandardError("Doesn't work with odd samples.")
+                    num_samples = len(percent_of_gait_cycle)
 
-                    first = percent_of_gait_cycle[percent_of_gait_cycle < 0.5] + 0.5
-                    second = percent_of_gait_cycle[percent_of_gait_cycle > 0.5] - 0.5
+                    if num_samples % 2 == 0:  # even
+                        first = percent_of_gait_cycle[:num_samples / 2] + 0.5
+                        second = percent_of_gait_cycle[num_samples / 2:] - 0.5
+                    else:  # odd
+                        first = percent_of_gait_cycle[percent_of_gait_cycle < 0.5] + 0.5
+                        second = percent_of_gait_cycle[percent_of_gait_cycle > 0.5] - 0.5
+
                     percent_of_gait_cycle = np.hstack((first, second))
 
                     # sort and sort gains/sigma same way
