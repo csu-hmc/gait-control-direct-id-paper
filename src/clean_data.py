@@ -65,12 +65,12 @@ for trial_number in sample_bounds.keys():
     plt.subplots_adjust(top=0.85)
 
     fig.savefig('../figures/gains-' + trial_number + '.png', dpi=300)
-    fig.close()
+    plt.close(fig)
 
     fig, axes = utils.plot_validation(result[-1], walking_data.raw_data, vafs)
 
     fig.savefig('../figures/validation-' + trial_number + '.png', dpi=300)
-    fig.close()
+    plt.close(fig)
 
 
 similar_trials = {'0.8': ['016', '019', '025', '032'],
@@ -91,7 +91,7 @@ for speed, trial_numbers in similar_trials.items():
                                                 var_gains)
 
     fig.savefig('../figures/mean-gains-' + speed + '.png', dpi=300)
-    fig.close()
+    plt.close(fig)
 
 
 fig, axes = plt.subplots(3, 2, sharex=True)
@@ -113,4 +113,4 @@ leg = axes[1, 0].legend(list(sum(zip(right_labels, left_labels), ())),
 leg.get_frame().set_alpha(0.75)
 
 fig.savefig('../figures/mean-gains-vs-speed.png', dpi=300)
-fig.close()
+plt.close(fig)
