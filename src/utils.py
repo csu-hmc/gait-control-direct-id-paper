@@ -15,6 +15,14 @@ from gaitanalysis.utils import _percent_formatter
 from dtk.process import coefficient_of_determination
 
 
+def remove_precomputed_data(tmp_directory, trial_number):
+    for filename in os.listdir(tmp_directory):
+        if trial_number in filename:
+            path = os.path.join(tmp_directory, filename)
+            os.remove(path)
+            print('{} was deleted.'.format(path))
+
+
 def trial_file_paths(trials_dir, trial_number):
     """Returns the most comman paths to the trials in the gait
     identification data set.
@@ -287,7 +295,7 @@ def section_signals_into_steps(walking_data, walking_data_path,
              num_samples_upper_bound)
     lower_values = walking_data.step_data[valid]
 
-    valid = num_samples_lower_bound < lower_values['Number of Samples']
+    valid = lower_values['Number of Samples'] > num_samples_lower_bound
     mid_values = lower_values[valid]
 
     return walking_data.steps.iloc[mid_values.index], walking_data
