@@ -1,38 +1,15 @@
 #/usr/bin/env python
 
+# external
 import matplotlib.pyplot as plt
 
+# local
 import utils
+from grf_landmark_settings import settings
 
-"""Trials:
+similar_trials = {}
 
-    0.8 m/s: 16, 19, 25, 32
-
-    1.2 m/s: 17, 20, 26, 31
-
-    1.6 m/s: 18, 21, 27, 33
-
-"""
-
-trial_number = '031'
-
-# Found these by examining the histogram of the number of samples in each
-# step.
-sample_bounds = {'016': (110, 149),
-                 '017': (95, 118),
-                 '018': (82, 110),
-                 '019': (96, 115),  # no bad steps
-                 '020': (80, 105),  # lots of bad steps, may need to change threshold/filter
-                 '021': (75, 115),  # this one has lots and lots of bad steps, needs work
-                 '025': (100, 124),  # no bad steps
-                 '026': (80, 110),
-                 '027': (60, 100),  # lots of bad steps
-                 '031': (0, 200),  # TODO
-                 '032': (0, 200),  # TODO
-                 '033': (0, 200),  # TODO
-                 }
-
-for trial_number in sample_bounds.keys():
+for trial_number, params in settings.items():
     msg = 'Identifying controller for trial #{}'.format(trial_number)
     print(msg)
     print('=' * len(msg))
@@ -46,8 +23,23 @@ for trial_number in sample_bounds.keys():
 
     steps, walking_data = \
         utils.section_signals_into_steps(walking_data, walking_data_path,
-                                         num_samples_lower_bound=sample_bounds[trial_number][0],
-                                         num_samples_upper_bound=sample_bounds[trial_number][1])
+                                         filter_frequency=params[0],
+                                         threshold=params[1],
+                                         num_samples_lower_bound=params[2],
+                                         num_samples_upper_bound=params[3])
+
+    # TODO : Both of the following two plots plot steps with the bad ones
+    # still in the bunch. The reduced steps are not set on walking_data.
+
+    axes = walking_data.step_data.hist()
+    fig = plt.gcf()
+    fig.savefig('../figures/step-data-' + trial_number + '.png', dpi=300)
+    plt.close(fig)
+
+    axes = walking_data.plot_steps('FP2.ForY')
+    fig = plt.gcf()
+    fig.savefig('../figures/veritcal-grf-' + trial_number + '.png', dpi=300)
+    plt.close(fig)
 
     sensor_labels, control_labels, result, solver = \
         utils.find_joint_isolated_controller(steps, event_data_path)
@@ -72,10 +64,9 @@ for trial_number in sample_bounds.keys():
     fig.savefig('../figures/validation-' + trial_number + '.png', dpi=300)
     plt.close(fig)
 
+    speed = str(meta_data['trial']['nominal-speed'])
+    similar_trials.setdefault(speed, []).append(trial_number)
 
-similar_trials = {'0.8': ['016', '019', '025', '032'],
-                  '1.2': ['017', '026', '031'],
-                  '1.6': ['018', '033']}
 
 mean_gains_per_speed = {}
 

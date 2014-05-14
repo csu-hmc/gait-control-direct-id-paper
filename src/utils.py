@@ -1,4 +1,4 @@
-#/usr/bin/env python
+#!/usr/bin/env python
 
 import os
 import time
@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import pandas
 import yaml
 from scipy.optimize import curve_fit
+from uncertainties import unumpy
 from gaitanalysis import motek
 from gaitanalysis.gait import WalkingData
 from gaitanalysis.controlid import SimpleControlSolver
@@ -47,39 +48,6 @@ def trial_file_paths(trials_dir, trial_number):
     meta_file_path = os.path.join(trials_dir, trial_dir, meta_file)
 
     return mocap_file_path, record_file_path, meta_file_path
-
-
-def add_negative_columns(data, axis, inv_dyn_labels):
-    """Creates new columns in the DataFrame for any D-Flow measurements in
-    the Z axis.
-
-    Parameters
-    ==========
-    data : pandas.DataFrame
-    axis : string
-        A string that is uniquely in all columns you want to make a negative
-        copy of, typically 'X', 'Y', or 'Z'.
-
-    Returns
-    =======
-    new_inv_dyn_labels : list of strings
-        New column labels.
-
-    """
-
-    new_inv_dyn_labels = []
-    for label_set in inv_dyn_labels:
-        new_label_set = []
-        for label in label_set:
-            if axis in label:
-                new_label = 'Negative' + label
-                data[new_label] = -data[label]
-            else:
-                new_label = label
-            new_label_set.append(new_label)
-        new_inv_dyn_labels.append(new_label_set)
-
-    return new_inv_dyn_labels
 
 
 def tmp_data_dir(default='data'):
@@ -194,10 +162,11 @@ def write_event_data_frame_to_disk(trial_number,
     except IOError:
         print('Cleaning the data.')
         dflow_data = motek.DFlowData(*file_paths)
-        dflow_data.clean_data(interpolate_markers=True)
+        dflow_data.clean_data(ignore_hbm=True)
         event_data_frame = \
             dflow_data.extract_processed_data(event=event,
-                                              index_col='TimeStamp')
+                                              index_col='TimeStamp',
+                                              isb_coordinates=True)
         # TODO: Change the event name in the HDF5 file into one that is
         # natural naming compliant for PyTables.
         event_data_frame.to_hdf(event_data_path, event)
@@ -230,16 +199,15 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
     except IOError:
         print('Computing the inverse dynamics.')
         # Here I compute the joint angles, rates, and torques, which all are
-        # low pass filtered.
+        # low pass filtered inside leg2d.m.
         marker_set = meta_data['trial']['marker-set']
         inv_dyn_labels = \
             motek.markers_for_2D_inverse_dynamics(marker_set=marker_set)
-        new_inv_dyn_labels = add_negative_columns(data_frame, 'Z',
-                                                  inv_dyn_labels)
+
         walking_data = WalkingData(data_frame)
 
         subject_mass = meta_data['subject']['mass']
-        args = new_inv_dyn_labels + [subject_mass, inv_dyn_low_pass_cutoff]
+        args = list(inv_dyn_labels) + [subject_mass, inv_dyn_low_pass_cutoff]
 
         walking_data.inverse_dynamics_2d(*args)
 
@@ -258,14 +226,15 @@ def section_signals_into_steps(walking_data, walking_data_path,
                                filter_frequency=15.0, threshold=30.0,
                                num_samples_lower_bound=53,
                                num_samples_upper_bound=132,
-                               num_samples=20):
+                               num_samples=20, force=False):
     """Computes inverse kinematics and dynamics and sections into steps."""
 
     def getem():
         print('Finding the ground reaction force landmarks.')
         start = time.clock()
         walking_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
-                                   filter_frequency=15.0, threshold=30.0)
+                                   filter_frequency=filter_frequency,
+                                   threshold=threshold)
         print('{:1.2f} s'.format(time.clock() - start))
 
         print('Spliting the data into steps.')
@@ -284,7 +253,7 @@ def section_signals_into_steps(walking_data, walking_data_path,
         f.close()
         start = time.clock()
         walking_data = WalkingData(walking_data_path)
-        if not hasattr(walking_data, 'steps'):
+        if not hasattr(walking_data, 'steps') or force is True:
             getem()
         else:
             print('Loading pre-computed steps.')
@@ -555,10 +524,20 @@ def plot_validation(estimated_controls, continuous, vafs):
 
 def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains):
 
+    # TODO : There is a covariance matrix associated with the parameter fit
+    # results.
+
     data_dir = tmp_data_dir()
 
-    all_gains = np.zeros((len(trial_numbers), num_gains, len(controls),
+    all_gains = np.zeros((len(trial_numbers),
+                          num_gains,
+                          len(controls),
                           len(sensors)))
+
+    all_var = np.zeros((len(trial_numbers),
+                        num_gains,
+                        len(controls),
+                        len(sensors)))
 
     for i, trial_number in enumerate(trial_numbers):
         file_name = 'gain-data-{}-longitudinal-perturbation.npz'.format(trial_number)
@@ -566,12 +545,14 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains):
         with np.load(gain_data_npz_path) as npz:
             # n, q, p
             all_gains[i] = npz['arr_0']
-            # TODO : use proper uncertainties to compute errorbars
-            #gain_var = npz['arr_3']
+            all_var[i] = npz['arr_3']
+
+    gains_with_uncertainties = unumpy.uarray(all_gains, all_var)
+    mean_gains_with_uncertainties = gains_with_uncertainties.mean(axis=0)
 
     # compute the mean and var
-    mean_gains = all_gains.mean(axis=0)
-    var_gains = all_gains.var(axis=0)
+    mean_gains = unumpy.nominal_values(mean_gains_with_uncertainties)
+    var_gains = unumpy.std_devs(mean_gains_with_uncertainties)
 
     return mean_gains, var_gains
 
@@ -636,9 +617,21 @@ def fit_fourier(x, y, p0, omega, **kwargs):
         Initial coefficient guess.
     omega : float
         Estimated flaot
-    Kwargs : optional
+    kwargs : optional
         Passed to curve_fit.
 
     """
     f = fourier_series(omega)
     return curve_fit(f, x, y, p0=p0, **kwargs)
+
+
+def before_finding_landmarks(trial_number):
+
+    event_data_frame, meta_data, event_data_path = \
+        write_event_data_frame_to_disk(trial_number)
+
+    walking_data, walking_data_path = \
+        write_inverse_dynamics_to_disk(event_data_frame, meta_data,
+                                       event_data_path)
+
+    return walking_data, walking_data_path
