@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
+# standard library
 import os
 import time
+from collections import OrderedDict
 
+# external libs
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas
@@ -268,6 +271,93 @@ def section_signals_into_steps(walking_data, walking_data_path,
     mid_values = lower_values[valid]
 
     return walking_data.steps.iloc[mid_values.index], walking_data
+
+
+def estimate_trunk_somersault_angle(data_frame):
+
+    x = data_frame['RSHO.PosX'] - data_frame['RGTRO.PosX']
+    y = data_frame['RSHO.PosY'] - data_frame['RGTRO.PosY']
+
+    data_frame['Trunk.Somersault.Angle'] = np.arctan2(x, y)
+
+    return data_frame
+
+
+def state_indices_for_controller():
+    """Returns the indices of the states that provide the correct control
+    vector order for the controller computation.
+
+    [5, 14, 4, 13, 3, 12, ...
+
+    """
+    sensors, controls = load_sensors_and_controls()
+    states, specified = load_state_specified_labels()
+    state_indices = []
+    for label in sensors:
+        state_indices.append(states.values().index(label))
+    return state_indices
+
+
+def control_indices_for_specified():
+    """Returns the indices of the control variables that provide the correct
+    specified vector.
+
+    Given a list of control labels, this will provide the index of the specified vector
+
+    This function is stupid and only works for this specific case and should produce:
+
+    [2, 1, 0, 5, 4, 3]
+
+
+    """
+    sensors, controls = load_sensors_and_controls()
+    states, specified = load_state_specified_labels()
+    control_indices = []
+    for var, label in specified.items():
+        try:
+            control_indices.append(controls.index(label))
+        except ValueError:
+            pass
+    return control_indices
+
+
+def load_state_specified_labels():
+    """Returns ordered dictionaries that map the state and specified
+    variable names to the sensor and control column labels."""
+    states = OrderedDict()
+
+    states['qax'] = 'RGRTO.PosX'
+    states['qay'] = 'RGTRO.PosY'
+    states['qa'] = 'Trunk.Somersault.Angle'
+    states['qb'] = 'Right.Hip.Flexion.Angle'
+    states['qc'] = 'Right.Knee.Flexion.Angle'  # should be Extension
+    states['qd'] = 'Right.Ankle.PlantarFlexion.Angle'  # should be Dorsi
+    states['qe'] = 'Left.Hip.Flexion.Angle'
+    states['qf'] = 'Left.Knee.Flexion.Angle'  # should be Extension
+    states['qg'] = 'Left.Ankle.PlantarFlexion.Angle'  # should be Dorsi
+    states['uax'] = 'RGTRO.VelX'
+    states['uay'] = 'RGTRO.VelY'
+    states['ua'] = 'Trunk.Somersault.Rate'
+    states['ub'] = 'Right.Hip.Flexion.Rate'
+    states['uc'] = 'Right.Knee.Flexion.Rate'  # should be Extension
+    states['ud'] = 'Right.Ankle.PlantarFlexion.Rate' # should be Dorsi
+    states['ue'] = 'Left.Hip.Flexion.Rate'
+    states['uf'] = 'Left.Knee.Flexion.Rate'  # should be Extension
+    states['ug'] = 'Left.Ankle.PlantarFlexion.Rate'  # should be Dorsi
+
+    specified = OrderedDict()
+
+    specified['Fax'] = 'TRUNKCOM.ForX'
+    specified['Fay'] = 'TRUNKCOM.ForY'
+    specified['Ta'] = 'Trunk.Somersault.Moment'
+    specified['Tb'] = 'Right.Hip.Flexion.Moment'
+    specified['Tc'] = 'Right.Knee.Flexion.Moment'  # should be Extension
+    specified['Td'] = 'Right.Ankle.PlantarFlexion.Moment'  # should be Dorsi
+    specified['Te'] = 'Left.Hip.Flexion.Moment'
+    specified['Tf'] = 'Left.Knee.Flexion.Moment'  # should be Extension
+    specified['Tg'] = 'Left.Ankle.PlantarFlexion.Moment'  # should be Dorsi
+
+    return states, specified
 
 
 def load_sensors_and_controls():
