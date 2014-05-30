@@ -1,7 +1,8 @@
-#/usr/bin/env python
+#!/usr/bin/env python
 
 # external
 import matplotlib.pyplot as plt
+from gaitanalysis.gait import plot_steps
 
 # local
 import utils
@@ -28,17 +29,17 @@ for trial_number, params in settings.items():
                                          num_samples_lower_bound=params[2],
                                          num_samples_upper_bound=params[3])
 
-    # TODO : Both of the following two plots plot steps with the bad ones
-    # still in the bunch. The reduced steps are not set on walking_data.
 
+    # This plot is for all gait cycles (bad ones haven't been dropped).
     axes = walking_data.step_data.hist()
     fig = plt.gcf()
     fig.savefig('../figures/step-data-' + trial_number + '.png', dpi=300)
     plt.close(fig)
 
-    axes = walking_data.plot_steps('FP2.ForY')
+    # This will plot only the good steps.
+    axes = plot_steps(steps, 'FP2.ForY')
     fig = plt.gcf()
-    fig.savefig('../figures/veritcal-grf-' + trial_number + '.png', dpi=300)
+    fig.savefig('../figures/vertical-grf-' + trial_number + '.png', dpi=300)
     plt.close(fig)
 
     sensor_labels, control_labels, result, solver = \
@@ -51,8 +52,15 @@ for trial_number, params in settings.items():
                                                 result[0], result[3])
 
     id_num_steps = solver.identification_data.shape[0]
-    fig.suptitle('Scheduled Gains Identified from {} steps in trial {}'.format(
-        id_num_steps, trial_number))
+
+    title = """\
+Scheduled Gains Identified from {} steps in trial {}
+Nominal Speed: {} m/s, Gender: {}
+"""
+
+    fig.suptitle(title.format(id_num_steps, trial_number,
+                              meta_data['trial']['nominal-speed'],
+                              meta_data['subject']['gender']))
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)
 
@@ -66,7 +74,6 @@ for trial_number, params in settings.items():
 
     speed = str(meta_data['trial']['nominal-speed'])
     similar_trials.setdefault(speed, []).append(trial_number)
-
 
 mean_gains_per_speed = {}
 
