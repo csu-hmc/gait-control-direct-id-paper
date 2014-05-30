@@ -867,3 +867,33 @@ def before_finding_landmarks(trial_number):
                                        event_data_path)
 
     return walking_data, walking_data_path
+
+
+def simulated_data_header_map():
+    """Returns a dictionary mapping the header names that Ton uses in his
+    simulation output to the head names I use in mind. There currently is no
+    guarantee that the sign conventions are the same, but that shouldn't
+    intefere with the system id."""
+
+    header_map = {
+        'Rhip.Angle': 'Right.Hip.Flexion.Angle',
+        'Rknee.Angle': 'Right.Knee.Flexion.Angle',
+        'Rankle.Angle': 'Right.Ankle.PlantarFlexion.Angle',
+        'Lhip.Angle': 'Left.Hip.Flexion.Angle',
+        'Lknee.Angle': 'Left.Knee.Flexion.Angle',
+        'Lankle.Angle': 'Left.Ankle.PlantarFlexion.Angle',
+        'Rhip.AngVel': 'Right.Hip.Flexion.Rate',
+        'Rknee.AngVel': 'Right.Knee.Flexion.Rate',
+        'Rankle.AngVel': 'Right.Ankle.PlantarFlexion.Rate',
+        'Lhip.AngVel': 'Left.Hip.Flexion.Rate',
+        'Lknee.AngVel': 'Left.Knee.Flexion.Rate',
+        'Lankle.AngVel': 'Left.Ankle.PlantarFlexion.Rate',
+        'Rhip.Mom': 'Right.Hip.Flexion.Moment',
+        'Rknee.Mom': 'Right.Knee.Flexion.Moment',
+        'Rankle.Mom': 'Right.Ankle.PlantarFlexion.Moment',
+        'Lhip.Mom': 'Left.Hip.Flexion.Moment',
+        'Lknee.Mom': 'Left.Knee.Flexion.Moment',
+        'Lankle.Mom': 'Left.Ankle.PlantarFlexion.Moment',
+    }
+
+    return header_map
