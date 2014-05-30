@@ -18,6 +18,7 @@ from dtk import process
 
 # local
 import utils
+import controllers
 from grf_landmark_settings import settings
 
 # debugging
@@ -107,6 +108,54 @@ def controller(x, t):
 
     return specified_sign * np.hstack(([0.0, lift_force, 0.0], 0.1 * joint_torques[control_indices]))
 
+# This loads an open loop control solution that way precomputed with Ton's
+# Matlab code.
+open_loop_states, open_loop_specified, open_loop_duration = utils.load_open_loop_trajectories()
+open_loop_percent_gait_cycle = np.linspace(0.0, 100.0, num=open_loop_states.shape[1])
+
+def open_loop_controller(x, t):
+
+    current_percent_gait_cycle = t % open_loop_duration
+
+    f_specified = interp1d(open_loop_percent_gait_cycle,
+                           open_loop_specified, axis=1,
+                           bounds_error=False, fill_value=0.0)
+
+    return np.squeeze(f_specified(current_percent_gait_cycle))
+
+
+def combined_controller(x, t):
+    """
+    x : ndarray, shape(18,)
+    t : float
+    """
+    current_percent_gait_cycle = t % open_loop_duration
+
+    f_m0 = interp1d(open_loop_percent_gait_cycle,
+                    open_loop_specified, axis=1,
+                    bounds_error=False, fill_value=0.0)
+
+    m0 = np.squeeze(f_m0(current_percent_gait_cycle))  # shape(9,)
+
+    f_s0 = interp1d(open_loop_percent_gait_cycle,
+                    open_loop_states, axis=1,
+                    bounds_error=False, fill_value=0.0)
+
+    s0 = np.squeeze(f_s0(current_percent_gait_cycle))  # shape(18,)
+
+    f_gains = interp1d(percent_gait_cycle, gain_matrices, axis=0,
+                       bounds_error=False, fill_value=0.0)
+
+    current_gain = f_gains(current_percent_gait_cycle)  # shape(6, 12)
+
+    x = state_sign * x
+    s0 = state_sign * s0
+
+    joint_torques = np.squeeze(np.dot(current_gain, (s0[state_indices] - x[state_indices])))
+
+    return m0 + specified_sign * np.hstack(([0.0, 0.0, 0.0], joint_torques[control_indices]))
+
+
 # Generate the system.
 (mass_matrix, forcing_vector, kane, constants, coordinates, speeds,
  specified, visualization_frames, ground, origin) = derive.derive_equations_of_motion()
@@ -120,7 +169,7 @@ model_constants_path = os.path.join(os.path.split(pygait2d.__file__)[0], '../dat
 constant_values = simulate.load_constants(model_constants_path)
 
 args = {'constants': np.array([constant_values[c] for c in constants]),
-        'specified': controller}
+        'specified': combined_controller}
 
 time_vector = np.linspace(0.0, 0.5, num=1000)
 
@@ -153,6 +202,8 @@ initial_conditions[14] = -mean_of_steps['Right.Ankle.PlantarFlexion.Rate'][0]
 initial_conditions[15] = mean_of_steps['Left.Hip.Flexion.Rate'][0]
 initial_conditions[16] = -mean_of_steps['Left.Knee.Flexion.Rate'][0]
 initial_conditions[17] = -mean_of_steps['Left.Ankle.PlantarFlexion.Rate'][0]
+
+initial_conditions = open_loop_states[:, 0]
 
 # Integrate the equations of motion
 trajectories = odeint(rhs, initial_conditions, time_vector, args=(args,))
