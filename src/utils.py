@@ -7,6 +7,7 @@ from collections import OrderedDict
 
 # external libs
 import numpy as np
+from scipy.io import loadmat
 import matplotlib.pyplot as plt
 import pandas
 import yaml
@@ -17,6 +18,92 @@ from gaitanalysis.gait import WalkingData
 from gaitanalysis.controlid import SimpleControlSolver
 from gaitanalysis.utils import _percent_formatter
 from dtk.process import coefficient_of_determination
+
+
+def load_open_loop_trajectories():
+    """Returns an optimal solution of the open loop trajectories of the 7
+    link planar walker for a single gait cycle.
+
+    Returns
+    -------
+    state_trajectories : ndarray, shape(18, 800)
+        The trajectories of the system states through half a gait cycle.
+    input_trajectories : ndarray, shape(9, 800)
+        The open loop control trajectories.
+    gait_cycle_duration : float
+        The duration of the gait cycle (heel strike to heel strike) in
+        seconds.
+
+    Notes
+    -----
+
+    System States
+
+    Index Name Description
+
+    0     q1   x hip translation wrt ground
+    1     q2   y hip translation wrt ground
+    2     q3   trunk z rotation wrt ground
+    3     q4   right thigh z rotation wrt trunk
+    4     q5   right shank z rotation wrt right thigh
+    5     q6   right foot z rotation wrt right shank
+    6     q7   left thigh z rotation wrt trunk
+    7     q8   left shank z rotation wrt left thigh
+    8     q9   left foot z rotation wrt left shank
+    9     u1   x hip translation wrt ground
+    10    u2   y hip translation wrt ground
+    11    u3   trunk z rotation wrt ground
+    12    u4   right thigh z rotation wrt trunk
+    13    u5   right shank z rotation wrt right thigh
+    14    u6   right foot z rotation wrt right shank
+    15    u7   left thigh z rotation wrt trunk
+    16    u8   left shank z rotation wrt left thigh
+    17    u9   left foot z rotation wrt left shank
+
+    Specified Inputs
+
+    0 t1: x force applied to trunk mass center
+    1 t2: y force applied to trunk mass center
+    2 t3: torque between ground and trunk
+    3 t4: torque between right thigh and trunk
+    4 t5: torque between right thigh and right shank
+    5 t6: torque between right foot and right shank
+    6 t7: torque between left thigh and trunk
+    7 t8: torque between left thigh and left shank
+    8 t9: torque between left foot and left shank
+
+    """
+
+    # this loads a half gait cycle solution
+    d = loadmat(os.path.join(tmp_data_dir(),
+                             'optimal-open-loop-trajectories.mat'))
+
+    # The trunk degrees of freedom stay the same but the left and right need
+    # to switch.
+
+    state_trajectories = np.zeros((18, 800))
+
+    # q
+    state_trajectories[0] = np.hstack((d['x'][0], d['x'][0] + d['x'][0, -1]))
+    state_trajectories[1:3] = np.hstack((d['x'][1:3], d['x'][1:3]))
+    state_trajectories[3:6, :] = np.hstack((d['x'][3:6], d['x'][6:9]))
+    state_trajectories[6:9, :] = np.hstack((d['x'][6:9], d['x'][3:6]))
+
+    # q'
+    state_trajectories[9:12] = np.hstack((d['x'][9:12], d['x'][9:12]))
+    state_trajectories[12:15, :] = np.hstack((d['x'][12:15], d['x'][15:18]))
+    state_trajectories[15:18, :] = np.hstack((d['x'][15:18], d['x'][12:15]))
+
+    # u
+    input_trajectories = np.zeros((9, 800))
+
+    input_trajectories[:3] = np.hstack((d['u'][:3], d['u'][:3]))
+    input_trajectories[3:6, :] = np.hstack((d['u'][3:6], d['u'][6:9]))
+    input_trajectories[6:9, :] = np.hstack((d['u'][6:9], d['u'][3:6]))
+
+    duration = 2.0 * d['dur']
+
+    return state_trajectories, input_trajectories, duration
 
 
 def remove_precomputed_data(tmp_directory, trial_number):
@@ -147,6 +234,50 @@ def load_meta_data(meta_file_path):
     return meta_data
 
 
+def compute_ground_load_drift(trial_number):
+    # load data from "Force Plate Zeroing" and "Unloaded End"
+    # truncate the data from each section because in may contain some loaded
+    # portions
+    # concatentae the data
+    # fit a line through each force plate measurement
+    # output the slope and intercept for each load for that trial
+    event_data = write_event_data_frame_to_disk(trial_number, 'Force Plate Zeroing')
+    event_data = write_event_data_frame_to_disk(trial_number, 'Unloaded End')
+
+
+def merge_unperturbed_gait_cycles(trial_number, params):
+    """Each trial has two one minute periods of unperturbed walking labeled:
+
+        First Normal Walking and Second Normal Walking
+
+        Probably should clip the beginning of the first and end of the
+        second by some amount to avoid odd data.
+
+    """
+    d = {'First Normal Walking': {},
+         'Second Normal Walking': {}}
+
+    for event in d.keys():
+
+        event_data = write_event_data_frame_to_disk(trial_number, event)
+        walk_data = write_inverse_dynamics_to_disk(*event_data)
+        step_data = section_signals_into_steps(*(list(walk_data) +
+                                                 list(params)))
+
+        d[event]['event_data_frame'] = event_data[0]
+        d[event]['meta_data'] = event_data[1]
+        d[event]['event_data_path'] = event_data[2]
+        d[event]['walking_data_path'] = walk_data[1]
+        d[event]['steps'] = step_data[0]
+        d[event]['walking_data'] = step_data[1]
+
+    normal_steps = pandas.concat((d['First Normal Walking']['steps'],
+                                  d['Second Normal Walking']['steps']),
+                                 ignore_index=True)
+
+    return normal_steps, d
+
+
 def write_event_data_frame_to_disk(trial_number,
                                    event='Longitudinal Perturbation'):
 
@@ -172,9 +303,10 @@ def write_event_data_frame_to_disk(trial_number,
                                               isb_coordinates=True)
         # TODO: Change the event name in the HDF5 file into one that is
         # natural naming compliant for PyTables.
+        print('Saving cleaned data: {}'.format(event_data_path))
         event_data_frame.to_hdf(event_data_path, event)
     else:
-        print('Loading pre-cleaned data')
+        print('Loading pre-cleaned data: {}'.format(event_data_path))
         f.close()
         event_data_frame = pandas.read_hdf(event_data_path, event)
 
@@ -214,9 +346,10 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
 
         walking_data.inverse_dynamics_2d(*args)
 
+        print('Saving inverse dynamics to {}.'.format(walking_data_path))
         walking_data.save(walking_data_path)
     else:
-        print('Loading pre-computed inverse dynamics.')
+        print('Loading pre-computed inverse dynamics from {}.'.format(walking_data_path))
         f.close()
         walking_data = WalkingData(walking_data_path)
 
@@ -259,7 +392,7 @@ def section_signals_into_steps(walking_data, walking_data_path,
         if not hasattr(walking_data, 'steps') or force is True:
             getem()
         else:
-            print('Loading pre-computed steps.')
+            print('Loading pre-computed steps from {}.'.format(walking_data_path))
             print(time.clock() - start)
 
     # Remove bad steps based on # samples in each step.
@@ -326,6 +459,10 @@ def load_state_specified_labels():
     variable names to the sensor and control column labels."""
     states = OrderedDict()
 
+    # TODO : The signs and naming conventions of each need state need to be
+    # properly dealt with. Right now I just use a negative sign in the
+    # simulate code for the variables that need that.
+
     states['qax'] = 'RGRTO.PosX'
     states['qay'] = 'RGTRO.PosY'
     states['qa'] = 'Trunk.Somersault.Angle'
@@ -389,7 +526,8 @@ def find_joint_isolated_controller(steps, event_data_path):
     # Controller identification.
 
     event = '-'.join(event_data_path[:-3].split('-')[-2:])
-    gain_data_h5_path = event_data_path.replace('cleaned-data', 'gain-data')
+    gain_data_h5_path = event_data_path.replace('cleaned-data',
+                                                'joint-isolated-gain-data')
     gain_data_npz_path = os.path.splitext(gain_data_h5_path)[0] + '.npz'
 
     print('Identifying the controller.')
@@ -418,11 +556,15 @@ def find_joint_isolated_controller(steps, event_data_path):
         f = open(gain_data_npz_path)
     except IOError:
         result = solver.solve(gain_omission_matrix=gain_omission_matrix)
+        print('Saving gains to:\n    {}\n    {}'.format(gain_data_npz_path,
+                                                        gain_data_h5_path))
         # first items are numpy arrays
         np.savez(gain_data_npz_path, *result[:-1])
         # the last item is a panel
         result[-1].to_hdf(gain_data_h5_path, event)
     else:
+        print('Loading pre-computed gains from:\n    {}\n    {}'.format(gain_data_npz_path,
+                                                                        gain_data_h5_path))
         f.close()
         with np.load(gain_data_npz_path) as npz:
             result = [npz['arr_0'],
@@ -612,7 +754,7 @@ def plot_validation(estimated_controls, continuous, vafs):
     return fig, axes
 
 
-def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains):
+def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains, event):
 
     # TODO : There is a covariance matrix associated with the parameter fit
     # results.
@@ -630,7 +772,7 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains):
                         len(sensors)))
 
     for i, trial_number in enumerate(trial_numbers):
-        file_name = 'gain-data-{}-longitudinal-perturbation.npz'.format(trial_number)
+        file_name = 'joint-isolated-gain-data-{}-{}.npz'.format(trial_number, event)
         gain_data_npz_path = os.path.join(data_dir, file_name)
         with np.load(gain_data_npz_path) as npz:
             # n, q, p
