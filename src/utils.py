@@ -756,8 +756,9 @@ def plot_validation(estimated_controls, continuous, vafs):
 
 def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains, event):
 
-    # TODO : There is a covariance matrix associated with the parameter fit
-    # results.
+    # TODO : If I could provide some uncertainty in the marker and ground
+    # reaction load measurements, this could theorectically propogate to
+    # here through the linear least squares fit.
 
     data_dir = tmp_data_dir()
 
@@ -779,12 +780,10 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains, event
             all_gains[i] = npz['arr_0']
             all_var[i] = npz['arr_3']
 
-    gains_with_uncertainties = unumpy.uarray(all_gains, all_var)
-    mean_gains_with_uncertainties = gains_with_uncertainties.mean(axis=0)
-
-    # compute the mean and var
-    mean_gains = unumpy.nominal_values(mean_gains_with_uncertainties)
-    var_gains = unumpy.std_devs(mean_gains_with_uncertainties)
+    # The mean of the gains across trials and the variabiilty of the gains
+    # across trials.
+    mean_gains = all_gains.mean(axis=0)
+    var_gains = all_gains.var(axis=0)
 
     return mean_gains, var_gains
 
