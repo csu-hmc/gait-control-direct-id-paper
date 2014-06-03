@@ -54,7 +54,7 @@ for trial_number, params in settings.items():
     id_num_steps = solver.identification_data.shape[0]
 
     title = """\
-Scheduled Gains Identified from {} steps in trial {}
+Scheduled Gains Identified from {} Gait Cycles in Trial {}
 Nominal Speed: {} m/s, Gender: {}
 """
 
@@ -81,7 +81,7 @@ for speed, trial_numbers in similar_trials.items():
     mean_gains, var_gains = utils.mean_joint_isolated_gains(trial_numbers,
                                                             sensor_labels,
                                                             control_labels,
-                                                            20)
+                                                            20, 'longitudinal-perturbation')
     mean_gains_per_speed[speed] = mean_gains
 
     fig, axes = utils.plot_joint_isolated_gains(sensor_labels,
