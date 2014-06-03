@@ -3,6 +3,7 @@
 # standard library
 import os
 import time
+#import random
 from collections import OrderedDict
 
 # external libs
@@ -12,12 +13,13 @@ import matplotlib.pyplot as plt
 import pandas
 import yaml
 from scipy.optimize import curve_fit
-from uncertainties import unumpy
 from gaitanalysis import motek
-from gaitanalysis.gait import WalkingData
+from gaitanalysis.gait import WalkingData, plot_steps
 from gaitanalysis.controlid import SimpleControlSolver
 from gaitanalysis.utils import _percent_formatter
 from dtk.process import coefficient_of_determination
+
+from grf_landmark_settings import settings
 
 
 def load_open_loop_trajectories():
@@ -896,3 +898,59 @@ def simulated_data_header_map():
     }
 
     return header_map
+
+def plot_unperturbed_to_perturbed_comparision(trial_number):
+    """This compares some select curves to show the difference in
+    variability of perturbed to unperturbed walking."""
+
+    params = settings[trial_number]
+
+    unperturbed_steps, other = \
+        merge_unperturbed_gait_cycles(trial_number, params)
+
+    event_data_frame, meta_data, event_data_path = \
+        write_event_data_frame_to_disk(trial_number)
+
+    walking_data, walking_data_path = \
+        write_inverse_dynamics_to_disk(event_data_frame, meta_data,
+                                       event_data_path)
+
+    perturbed_steps, walking_data = \
+        section_signals_into_steps(walking_data, walking_data_path,
+                                   filter_frequency=params[0],
+                                   threshold=params[1],
+                                   num_samples_lower_bound=params[2],
+                                   num_samples_upper_bound=params[3])
+
+    variables = ['FP2.ForY',
+                 'Right.Ankle.PlantarFlexion.Moment',
+                 'Right.Knee.Flexion.Rate',
+                 'Right.Hip.Flexion.Angle']
+
+    # The following can be used to use the same number of step for both
+    # plots.
+    #num_steps = unperturbed_steps.shape[0]
+    #random_indices = random.sample(range(perturbed_steps.shape[0]), num_steps)
+
+    num_unperturbed_steps = unperturbed_steps.shape[0]
+    num_perturbed_steps = perturbed_steps.shape[0]
+
+
+    axes = plot_steps(perturbed_steps, *variables, mean=True)
+    axes = plot_steps(unperturbed_steps, *variables, mean=True, axes=axes,
+                      color='red')
+
+    axes[0].legend(['Perturbed: {} cycles'.format(num_perturbed_steps),
+                    'Un-Perturbed: {} cycles'.format(num_unperturbed_steps)],
+                   fontsize='8')
+
+    figure_dir = '../figures'
+
+    if not os.path.exists(figure_dir):
+        os.makedirs(figure_dir)
+
+    fig = plt.gcf()
+    filename = 'unperturbed-perturbed-comparison-' + trial_number + '.png'
+    fig_path = os.path.join(figure_dir, filename)
+    fig.savefig(fig_path, dpi=300)
+    plt.close(fig)
