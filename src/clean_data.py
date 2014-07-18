@@ -8,7 +8,6 @@ from gaitanalysis.gait import plot_steps
 import utils
 from grf_landmark_settings import settings
 
-similar_trials = {}
 
 for trial_number, params in settings.items():
     msg = 'Identifying controller for trial #{}'.format(trial_number)
@@ -48,8 +47,10 @@ for trial_number, params in settings.items():
     vafs = utils.variance_accounted_for(result[-1], solver.validation_data,
                                         control_labels)
 
-    fig, axes = utils.plot_joint_isolated_gains(sensor_labels, control_labels,
-                                                result[0], result[3])
+    fig, axes = utils.plot_joint_isolated_gains_better(sensor_labels,
+                                                       control_labels,
+                                                       result[0], result[3],
+                                                       steps.mean(axis='items'))
 
     id_num_steps = solver.identification_data.shape[0]
 
@@ -64,6 +65,7 @@ Nominal Speed: {} m/s, Gender: {}
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)
 
+    fig.set_size_inches( (14.0, 14.0) )
     fig.savefig('../figures/gains-' + trial_number + '.png', dpi=300)
     plt.close(fig)
 
@@ -72,8 +74,9 @@ Nominal Speed: {} m/s, Gender: {}
     fig.savefig('../figures/validation-' + trial_number + '.png', dpi=300)
     plt.close(fig)
 
-    speed = str(meta_data['trial']['nominal-speed'])
-    similar_trials.setdefault(speed, []).append(trial_number)
+# Do not include subject 9 in the means because of the odd ankle joint
+# torques.
+similar_trials = utils.build_similar_trials(bad_subjects=[9])
 
 mean_gains_per_speed = {}
 
@@ -84,10 +87,15 @@ for speed, trial_numbers in similar_trials.items():
                                                             20, 'longitudinal-perturbation')
     mean_gains_per_speed[speed] = mean_gains
 
-    fig, axes = utils.plot_joint_isolated_gains(sensor_labels,
-                                                control_labels, mean_gains,
-                                                var_gains)
+    # TODO : This should plot the mean angles and rates from all the trials?
+    # Right now it just uses the last trial.
+    fig, axes = utils.plot_joint_isolated_gains_better(sensor_labels,
+                                                       control_labels,
+                                                       mean_gains,
+                                                       var_gains,
+                                                       steps.mean(axis='items'))
 
+    fig.set_size_inches( (14.0, 14.0) )
     fig.savefig('../figures/mean-gains-' + speed + '.png', dpi=300)
     plt.close(fig)
 

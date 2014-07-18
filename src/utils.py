@@ -581,6 +581,56 @@ def find_joint_isolated_controller(steps, event_data_path):
 
     return sensors, controls, result, solver
 
+def find_full_gain_matrix_controller(steps, event_data_path):
+    # Controller identification.
+
+    event = '-'.join(event_data_path[:-3].split('-')[-2:])
+    gain_data_h5_path = event_data_path.replace('cleaned-data',
+                                                'full-matrix-gain-data')
+    gain_data_npz_path = os.path.splitext(gain_data_h5_path)[0] + '.npz'
+
+    print('Identifying the controller.')
+
+    start = time.clock()
+
+    sensors, controls = load_sensors_and_controls()
+
+    # Use the first 3/4 of the steps to compute the gains and validate on
+    # the last 1/4. Most runs seem to be about 500 steps.
+    num_steps = steps.shape[0]
+    solver = SimpleControlSolver(steps.iloc[:num_steps * 3 / 4],
+                                 sensors,
+                                 controls,
+                                 validation_data=steps.iloc[num_steps * 3 / 4:])
+
+    try:
+        f = open(gain_data_h5_path)
+        f.close()
+        f = open(gain_data_npz_path)
+    except IOError:
+        result = solver.solve(ignore_cov=True)
+        print('Saving gains to:\n    {}\n    {}'.format(gain_data_npz_path,
+                                                        gain_data_h5_path))
+        # first items are numpy arrays
+        np.savez(gain_data_npz_path, *result[:-1])
+        # the last item is a panel
+        result[-1].to_hdf(gain_data_h5_path, event)
+    else:
+        print('Loading pre-computed gains from:\n    {}\n    {}'.format(gain_data_npz_path,
+                                                                        gain_data_h5_path))
+        f.close()
+        with np.load(gain_data_npz_path) as npz:
+            result = [npz['arr_0'],
+                      npz['arr_1'],
+                      npz['arr_2'],
+                      npz['arr_3'],
+                      npz['arr_4']]
+        result.append(pandas.read_hdf(gain_data_h5_path, event))
+
+    print('{:1.2f} s'.format(time.clock() - start))
+
+    return sensors, controls, result, solver
+
 
 def plot_joint_isolated_gains(sensor_labels, control_labels, gains,
                               gains_variance, axes=None, show_std=True,
@@ -698,7 +748,7 @@ def variance_accounted_for(estimated_panel, validation_panel, controls):
 def plot_validation(estimated_controls, continuous, vafs):
     print('Generating validation plot.')
     start = time.clock()
-    # get the first and last time of the estimated controls (10 steps)
+    # get the first and last time of the estimated controls (just 10 steps)
     beg_first_step = estimated_controls.iloc[0]['Original Time'][0]
     end_last_step = estimated_controls.iloc[9]['Original Time'][-1]
     period = continuous[beg_first_step:end_last_step]
@@ -736,10 +786,10 @@ def plot_validation(estimated_controls, continuous, vafs):
 
     for i, m in enumerate(moments):
         adjacent = (period['Right.' + m].values, period['Left.' + m].values)
-        axes[i, 0].set_ylim((np.max(np.hstack(adjacent)),
-                             np.min(np.hstack(adjacent))))
-        axes[i, 1].set_ylim((np.max(np.hstack(adjacent)),
-                             np.min(np.hstack(adjacent))))
+        axes[i, 0].set_ylim((np.min(np.hstack(adjacent)),
+                             np.max(np.hstack(adjacent))))
+        axes[i, 1].set_ylim((np.min(np.hstack(adjacent)),
+                             np.max(np.hstack(adjacent))))
 
     axes[0, 0].set_xlim((beg_first_step, end_last_step))
 
@@ -776,6 +826,40 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains, event
 
     for i, trial_number in enumerate(trial_numbers):
         file_name = 'joint-isolated-gain-data-{}-{}.npz'.format(trial_number, event)
+        gain_data_npz_path = os.path.join(data_dir, file_name)
+        with np.load(gain_data_npz_path) as npz:
+            # n, q, p
+            all_gains[i] = npz['arr_0']
+            all_var[i] = npz['arr_3']
+
+    # The mean of the gains across trials and the variabiilty of the gains
+    # across trials.
+    mean_gains = all_gains.mean(axis=0)
+    var_gains = all_gains.var(axis=0)
+
+    return mean_gains, var_gains
+
+
+def mean_gains(trial_numbers, sensors, controls, num_gains, event, controller):
+
+    # TODO : If I could provide some uncertainty in the marker and ground
+    # reaction load measurements, this could theorectically propogate to
+    # here through the linear least squares fit.
+
+    data_dir = tmp_data_dir()
+
+    all_gains = np.zeros((len(trial_numbers),
+                          num_gains,
+                          len(controls),
+                          len(sensors)))
+
+    all_var = np.zeros((len(trial_numbers),
+                        num_gains,
+                        len(controls),
+                        len(sensors)))
+
+    for i, trial_number in enumerate(trial_numbers):
+        file_name = '{}-gain-data-{}-{}.npz'.format(controller, trial_number, event)
         gain_data_npz_path = os.path.join(data_dir, file_name)
         with np.load(gain_data_npz_path) as npz:
             # n, q, p
@@ -954,3 +1038,183 @@ def plot_unperturbed_to_perturbed_comparision(trial_number):
     fig_path = os.path.join(figure_dir, filename)
     fig.savefig(fig_path, dpi=300)
     plt.close(fig)
+
+
+def plot_joint_isolated_gains_better(sensor_labels, control_labels, gains,
+                                     gains_variance, mean_steps, axes=None,
+                                     show_gain_std=True, linestyle='-'):
+    """Plots a 3 x 3 subplot where the columns corresond to a joint (ankle,
+    knee, hip). The top show shows the proportional gain plots and the
+    bottom row shows the derivative gain plots. The middle row plots the
+    mean angle and angular rate on a plotyy chart.
+
+    Parameters
+    ----------
+    sensor_labels : list of strings, len(p)
+        Column headers corresponding to the sensors.
+    control_labels : list of strings, len(q)
+        Column header corrsing to the controls.
+    gains : ndarray, shape(n, q, p)
+        The gains at each percent gait cycle.
+    gains_variance : ndarray, shape(n, q, p)
+        The variance of the gains at each percent gait cycle.
+    mean_steps : pandas.DataFrame
+        The index should be percent gait cycle and the mean sensor values
+        across the gait cycle should be in the columns.
+
+    """
+
+    print('Generating gain plot.')
+
+    start = time.clock()
+
+    if axes is None:
+        fig, axes = plt.subplots(3, 3, sharex=True)
+    else:
+        fig = axes[0, 0].figure
+
+    for i, (row, unit) in enumerate(zip(['Angle', 'Trajectory', 'Rate'],
+                                        ['Nm/rad', None, r'Nm $\cdot$ s/rad'])):
+        for j, (col, sign) in enumerate(zip(['Ankle', 'Knee', 'Hip'],
+                                            ['PlantarFlexion', 'Flexion', 'Flexion'])):
+            for side, marker, color in zip(['Right', 'Left'],
+                                           ['o', 'o'],
+                                           ['Blue', 'Red']):
+
+                if row != 'Trajectory':
+                    row_label = '.'.join([side, col, sign, row])
+                    col_label = '.'.join([side, col, sign + '.Moment'])
+
+                    gain_row_idx = sensor_labels.index(row_label)
+                    gain_col_idx = control_labels.index(col_label)
+
+                    gains_per = gains[:, gain_col_idx, gain_row_idx]
+                    sigma = np.sqrt(gains_variance[:, gain_col_idx, gain_row_idx])
+
+                    percent_of_gait_cycle = np.linspace(0.0,
+                                                        1.0 - 1.0 / gains.shape[0],
+                                                        num=gains.shape[0])
+
+                    xlim = (0.0, 1.0)
+
+                    if side == 'Left':
+                        # Shift that diggidty-dogg signal 50%
+                        num_samples = len(percent_of_gait_cycle)
+
+                        if num_samples % 2 == 0:  # even
+                            first = percent_of_gait_cycle[:num_samples / 2] + 0.5
+                            second = percent_of_gait_cycle[num_samples / 2:] - 0.5
+                        else:  # odd
+                            first = percent_of_gait_cycle[percent_of_gait_cycle < 0.5] + 0.5
+                            second = percent_of_gait_cycle[percent_of_gait_cycle > 0.5] - 0.5
+
+                        percent_of_gait_cycle = np.hstack((first, second))
+
+                        # sort and sort gains/sigma same way
+                        sort_idx = np.argsort(percent_of_gait_cycle)
+                        percent_of_gait_cycle = percent_of_gait_cycle[sort_idx]
+                        gains_per = gains_per[sort_idx]
+                        sigma = sigma[sort_idx]
+
+                    if show_gain_std:
+                        axes[i, j].fill_between(percent_of_gait_cycle,
+                                                gains_per - sigma,
+                                                gains_per + sigma,
+                                                alpha=0.5,
+                                                color=color)
+
+                    axes[i, j].plot(percent_of_gait_cycle, gains_per,
+                                    marker='o',
+                                    ms=2,
+                                    color=color,
+                                    label=side,
+                                    linestyle=linestyle)
+
+                    axes[i, j].set_title(r"{}: {} $\rightarrow$ Moment".format(col, row))
+
+                    axes[i, j].set_ylabel(unit)
+
+                    if i == 2:
+                        axes[i, j].set_xlabel(r'% of Gait Cycle')
+                        axes[i, j].xaxis.set_major_formatter(_percent_formatter)
+                        axes[i, j].set_xlim(xlim)
+
+                elif row == 'Trajectory' and side == 'Right':
+                    # TODO : Should I plot mean of right and shifted left?
+                    angle_sensor = '.'.join([side, col, sign, 'Angle'])
+                    rate_sensor = '.'.join([side, col, sign, 'Rate'])
+                    if col == 'Ankle':
+                        angle = mean_steps[angle_sensor] + np.pi / 2.0
+                    else:
+                        angle = mean_steps[angle_sensor]
+                    axes[i, j].plot(mean_steps.index.values.astype(float),
+                                    angle, 'k-')
+                    axes[i, j].set_ylabel('rad')
+                    rate_axis = axes[i, j].twinx()
+                    rate_axis.plot(mean_steps.index.values.astype(float),
+                                   mean_steps[rate_sensor], 'k:')
+                    rate_axis.set_ylabel('rad/s')
+                    axes[i, j].set_title(r"Mean {} Joint Trajectories".format(col))
+                    leg = axes[i, j].legend(('Angle',), loc=2,
+                                            fancybox=True, fontsize=8)
+                    leg.get_frame().set_alpha(0.75)
+                    leg = rate_axis.legend(('Rate',), loc=1,
+                                           fancybox=True, fontsize=8)
+                    leg.get_frame().set_alpha(0.75)
+
+    leg = axes[0, 0].legend(('Right', 'Left'), loc='best', fancybox=True,
+                            fontsize=8)
+    leg.get_frame().set_alpha(0.75)
+
+    print('{:1.2f} s'.format(time.clock() - start))
+
+    #plt.tight_layout()
+
+    return fig, axes
+
+
+def build_similar_trials_dict(bad_subjects=None):
+    """Returns a dictionary of all trials with the same speed."""
+
+    if bad_subjects is None:
+        bad_subjects = []
+
+    similar_trials = {}
+
+    for trial_number, params in settings.items():
+
+        trials_dir = trial_data_dir()
+        paths = trial_file_paths(trials_dir, trial_number)
+        meta_data = load_meta_data(paths[-1])
+        speed = str(meta_data['trial']['nominal-speed'])
+        if meta_data['subject']['id'] not in bad_subjects:
+            similar_trials.setdefault(speed, []).append(trial_number)
+
+    return similar_trials
+
+
+def plot_mean_gains(similar_trials, trajectories, sensor_labels,
+                    control_labels, event, num_samples_in_cycle, fig_dir):
+
+    mean_gains_per_speed = {}
+
+    for speed, trial_numbers in similar_trials.items():
+        mean_gains, var_gains = mean_joint_isolated_gains(trial_numbers,
+                                                          sensor_labels,
+                                                          control_labels,
+                                                          num_samples_in_cycle,
+                                                          event)
+        mean_gains_per_speed[speed] = mean_gains
+
+        fig, axes = plot_joint_isolated_gains_better(sensor_labels,
+                                                     control_labels,
+                                                     mean_gains,
+                                                     var_gains,
+                                                     trajectories)
+
+        fig.set_size_inches((6.0, 6.0))
+        path = os.path.join(fig_dir, 'mean-gains-{}.png'.format(speed))
+        fig.savefig(path, dpi=300)
+        plt.close(fig)
+
+    return mean_gains_per_speed
