@@ -361,7 +361,7 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
 
 
 def section_signals_into_steps(walking_data, walking_data_path,
-                               filter_frequency=15.0, threshold=30.0,
+                               filter_frequency=10.0, threshold=30.0,
                                num_samples_lower_bound=53,
                                num_samples_upper_bound=132,
                                num_samples=20, force=False):
