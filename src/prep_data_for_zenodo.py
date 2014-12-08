@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
-"""
-This script packages the raw data collected during the perturbation
+"""This script packages the raw data collected during the perturbation
 experiments into a single gzipped tarball which retains the directory
 structure and only includes the specific files needed for public
 dissemination.
@@ -10,10 +9,9 @@ To use::
 
     $ python prep_data_for_zenodo.py <path-to-data-dir>
 
-Zenodo has a default file size limit of 2GB, so I may need to split this up
-into multiple tar balls each under 2GB.
+- Zenodo has a default file size limit of 2GB.
+- Figshare has a filesize limit of 250mb.
 
-Figshare has a filesize limit of 250mb.
 """
 
 import os
@@ -22,21 +20,22 @@ import re
 import tarfile
 from collections import OrderedDict
 
-# T001 and T002 where exploratory data provided by Obinna and Ton and
-# were not collected with the protocol for the perturbation experiments,
-# so we exclude them.
+# T001 and T002 where exploratory data provided by Obinna and Ton and were
+# not collected with the protocol for the perturbation experiments, so we
+# exclude them.
 trials_not_to_include = ['T001', 'T002']
 
-# Only include files that fit thiss naming convention.
+# Only include files that fit this naming convention.
 file_regexes = ['README.rst',
                 'meta-\d{3}.yml',
                 'mocap-\d{3}.txt',
                 'record-\d{3}.txt',
                 #'cortex-\d{3}.zip',
                 #'cortex-\d{3}-\d{2}.zip',
-                'TestingProtocol-\d{3}.caren',
-                'TestingProtocol-\d{3}.dflow',
-                'TestingProtocol-\d{3}.sceneconfig']
+                #'TestingProtocol-\d{3}.caren',
+                #'TestingProtocol-\d{3}.dflow',
+                #'TestingProtocol-\d{3}.sceneconfig',
+                ]
 
 file_regexes = [re.compile(regex) for regex in file_regexes]
 
@@ -69,9 +68,13 @@ def group_trial_dirs_by_size(directory):
 
     for i, dir_size in enumerate(sizes):
         size_of_dirs += dir_size
-        # put them into ~1GB chunks (should be compressed ~ 4X)
-        if size_of_dirs > 1e9:
-            groups[file_idx] = trial_dirs[start_idx:i]
+        # put them into ~4.5GB chunks (should be compressed ~ 4X)
+        if size_of_dirs > 4.5e9 or i == (len(sizes) - 1):
+            if i == (len(sizes) - 1):
+                stop_idx = None
+            else:
+                stop_idx = i
+            groups[file_idx] = trial_dirs[start_idx:stop_idx]
             # Reset
             start_idx = i
             size_of_dirs = 0
@@ -83,6 +86,11 @@ def group_trial_dirs_by_size(directory):
 def build_tar_ball(directory):
 
     groups = group_trial_dirs_by_size(directory)
+
+    for k, v in groups.items():
+        print('Group: {}'.format(k))
+        print('Number in group = {}'.format(len(v)))
+        print(v)
 
     base_tar_file_name = 'perturbed-walking-data-{:0>2}.tar.gz'
 
@@ -102,10 +110,19 @@ def build_tar_ball(directory):
 
                     subdir = os.path.basename(os.path.normpath(dirpath))
 
-                    if any(matches) and subdir in trial_dirs:
+                    if any(matches) and (subdir in trial_dirs or
+                            ((filename == 'README.rst') and
+                            (subdir not in trials_not_to_include))):
+
                         path_to_file = os.path.join(dirpath, filename)
-                        tar.add(path_to_file, arcname=os.path.join(subdir,
-                                                                   filename))
+
+                        if filename == 'README.rst':
+                            arcname = filename
+                        else:
+                            arcname = os.path.join(subdir, filename)
+
+                        tar.add(path_to_file, arcname=arcname)
+
                         print('Added {} to {}'.format(os.path.join(dirpath,
                                                                    filename),
                                                       tar_file_name))
