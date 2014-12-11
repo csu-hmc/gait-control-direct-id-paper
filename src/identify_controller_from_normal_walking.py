@@ -5,7 +5,7 @@ import os
 
 # external
 import matplotlib.pyplot as plt
-from gaitanalysis.gait import plot_steps
+from gaitanalysis.gait import plot_gait_cycles
 
 # local
 import utils
@@ -25,7 +25,7 @@ for trial_number, params in settings.items():
 
     steps, other = utils.merge_unperturbed_gait_cycles(trial_number, params)
 
-    axes = plot_steps(steps, 'FP2.ForY')
+    axes = plot_gait_cycles(steps, 'FP2.ForY')
     fig = plt.gcf()
     fig_path = os.path.join(figure_dir,
                             'vertical-grf-' + trial_number + '.png')

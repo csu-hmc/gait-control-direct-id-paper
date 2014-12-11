@@ -48,23 +48,23 @@ walking_data, walking_data_path = \
                                          event_data_path)
 
 params = settings[trial_number]
-steps, walking_data = \
-    utils.section_signals_into_steps(walking_data, walking_data_path,
-                                        filter_frequency=params[0],
-                                        threshold=params[1],
-                                        num_samples_lower_bound=params[2],
-                                        num_samples_upper_bound=params[3])
+gait_cycles, walking_data = \
+    utils.section_into_gait_cycles(walking_data, walking_data_path,
+                                   filter_frequency=params[0],
+                                   threshold=params[1],
+                                   num_samples_lower_bound=params[2],
+                                   num_samples_upper_bound=params[3])
 
 sensor_labels, control_labels, result, solver = \
-    utils.find_joint_isolated_controller(steps, event_data_path)
+    utils.find_joint_isolated_controller(gait_cycles, event_data_path)
 
 
 # Define a simulation controller based off of the results of the
 # identification.
 # TODO : I likely need to take the mean of the left at right gains so things are
 # symmetric.
-mean_cycle_time = walking_data.step_data['Step Duration'].mean()
-percent_gait_cycle = steps.iloc[0].index.values.astype(float)  # n
+mean_cycle_time = walking_data.gait_cycle_stats['Stride Duration'].mean()
+percent_gait_cycle = gait_cycles.iloc[0].index.values.astype(float)  # n
 m_stars = result[1]  # n x q
 gain_matrices = result[0]  # n x q x p
 
@@ -173,35 +173,35 @@ args = {'constants': np.array([constant_values[c] for c in constants]),
 
 time_vector = np.linspace(0.0, 0.5, num=1000)
 
-mean_of_steps = steps.mean(axis='items')
+mean_of_gait_cycles = gait_cycles.mean(axis='items')
 
 initial_conditions = np.zeros(18)
 
 initial_conditions[0] = 0.0
-initial_conditions[1] = mean_of_steps['RGTRO.PosY'][0]
+initial_conditions[1] = mean_of_gait_cycles['RGTRO.PosY'][0]
 
-initial_conditions[2] = -mean_of_steps['Trunk.Somersault.Angle'][0]  # not sure why I had to set this to negative
+initial_conditions[2] = -mean_of_gait_cycles['Trunk.Somersault.Angle'][0]  # not sure why I had to set this to negative
 
-initial_conditions[3] = mean_of_steps['Right.Hip.Flexion.Angle'][0]
-initial_conditions[4] = -mean_of_steps['Right.Knee.Flexion.Angle'][0]
-initial_conditions[5] = -mean_of_steps['Right.Ankle.PlantarFlexion.Angle'][0] - np.pi / 2.0  # seems like the inverse dynamics angles for ankle are not based on nominal position, thus the pi/2
+initial_conditions[3] = mean_of_gait_cycles['Right.Hip.Flexion.Angle'][0]
+initial_conditions[4] = -mean_of_gait_cycles['Right.Knee.Flexion.Angle'][0]
+initial_conditions[5] = -mean_of_gait_cycles['Right.Ankle.PlantarFlexion.Angle'][0] - np.pi / 2.0  # seems like the inverse dynamics angles for ankle are not based on nominal position, thus the pi/2
 
-initial_conditions[6] = mean_of_steps['Left.Hip.Flexion.Angle'][0]
-initial_conditions[7] = -mean_of_steps['Left.Knee.Flexion.Angle'][0]
-initial_conditions[8] = -mean_of_steps['Left.Ankle.PlantarFlexion.Angle'][0] - np.pi / 2.0
+initial_conditions[6] = mean_of_gait_cycles['Left.Hip.Flexion.Angle'][0]
+initial_conditions[7] = -mean_of_gait_cycles['Left.Knee.Flexion.Angle'][0]
+initial_conditions[8] = -mean_of_gait_cycles['Left.Ankle.PlantarFlexion.Angle'][0] - np.pi / 2.0
 
-initial_conditions[9] = mean_of_steps['RightBeltSpeed'][0]
-initial_conditions[10] = mean_of_steps['RGTRO.VelY'][0]
+initial_conditions[9] = mean_of_gait_cycles['RightBeltSpeed'][0]
+initial_conditions[10] = mean_of_gait_cycles['RGTRO.VelY'][0]
 
-initial_conditions[11] = mean_of_steps['Trunk.Somersault.Rate'][0]
+initial_conditions[11] = mean_of_gait_cycles['Trunk.Somersault.Rate'][0]
 
-initial_conditions[12] = mean_of_steps['Right.Hip.Flexion.Rate'][0]
-initial_conditions[13] = -mean_of_steps['Right.Knee.Flexion.Rate'][0]
-initial_conditions[14] = -mean_of_steps['Right.Ankle.PlantarFlexion.Rate'][0]
+initial_conditions[12] = mean_of_gait_cycles['Right.Hip.Flexion.Rate'][0]
+initial_conditions[13] = -mean_of_gait_cycles['Right.Knee.Flexion.Rate'][0]
+initial_conditions[14] = -mean_of_gait_cycles['Right.Ankle.PlantarFlexion.Rate'][0]
 
-initial_conditions[15] = mean_of_steps['Left.Hip.Flexion.Rate'][0]
-initial_conditions[16] = -mean_of_steps['Left.Knee.Flexion.Rate'][0]
-initial_conditions[17] = -mean_of_steps['Left.Ankle.PlantarFlexion.Rate'][0]
+initial_conditions[15] = mean_of_gait_cycles['Left.Hip.Flexion.Rate'][0]
+initial_conditions[16] = -mean_of_gait_cycles['Left.Knee.Flexion.Rate'][0]
+initial_conditions[17] = -mean_of_gait_cycles['Left.Ankle.PlantarFlexion.Rate'][0]
 
 initial_conditions = open_loop_states[:, 0]
 

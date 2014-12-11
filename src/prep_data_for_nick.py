@@ -21,26 +21,28 @@ for trial_number, params in settings.items():
     print('Creating data for trial {}'.format(trial_number))
 
     params = list(params)
-    params = tuple(params + [100, False])  # 100 samples per cycle and force recomputation
+    # 100 samples per cycle and force recomputation
+    params = tuple(params + [100, False])
 
-    steps, other = utils.merge_unperturbed_gait_cycles(trial_number, params)
+    gait_cycles, other = utils.merge_unperturbed_gait_cycles(trial_number,
+                                                             params)
 
     data = other['First Normal Walking']
     meta_data = data['meta_data']
 
     speed = meta_data['trial']['nominal-speed']
 
-    mean_cycle_duration = data['walking_data'].step_data['Step Duration'].mean()
+    mean_cycle_duration = data['gait_data'].gait_cycle_stats['Stride Duration'].mean()
 
-    mean_of_cycles = steps.mean(axis='items')
-    std_of_cycles = steps.std(axis='items')
+    mean_of_cycles = gait_cycles.mean(axis='items')
+    std_of_cycles = gait_cycles.std(axis='items')
 
     percent_gait_cycle = mean_of_cycles.index.values.astype(float)
 
     data_dict = {'percent_gait_cycle': percent_gait_cycle,
                  'mass': float(meta_data['subject']['mass']),
                  'speed': speed,
-                 'num_cycles': steps.shape[0],
+                 'num_cycles': gait_cycles.shape[0],
                  'mean_cycle_duration': mean_cycle_duration}
 
     cols = ['Right.Ankle.PlantarFlexion.Angle',

@@ -2,7 +2,7 @@
 
 # external
 import matplotlib.pyplot as plt
-from gaitanalysis.gait import plot_steps
+from gaitanalysis.gait import plot_gait_cycles
 
 # local
 import utils
@@ -17,26 +17,25 @@ for trial_number, params in settings.items():
     event_data_frame, meta_data, event_data_path = \
         utils.write_event_data_frame_to_disk(trial_number)
 
-    walking_data, walking_data_path = \
+    gait_data, gait_data_path = \
         utils.write_inverse_dynamics_to_disk(event_data_frame, meta_data,
                                              event_data_path)
 
-    steps, walking_data = \
-        utils.section_signals_into_steps(walking_data, walking_data_path,
-                                         filter_frequency=params[0],
-                                         threshold=params[1],
-                                         num_samples_lower_bound=params[2],
-                                         num_samples_upper_bound=params[3])
-
+    steps, gait_data = \
+        utils.section_into_gait_cycles(gait_data, gait_data_path,
+                                       filter_frequency=params[0],
+                                       threshold=params[1],
+                                       num_samples_lower_bound=params[2],
+                                       num_samples_upper_bound=params[3])
 
     # This plot is for all gait cycles (bad ones haven't been dropped).
-    axes = walking_data.step_data.hist()
+    axes = gait_data.gait_cycle_stats.hist()
     fig = plt.gcf()
     fig.savefig('../figures/step-data-' + trial_number + '.png', dpi=300)
     plt.close(fig)
 
     # This will plot only the good steps.
-    axes = plot_steps(steps, 'FP2.ForY')
+    axes = plot_gait_cycles(steps, 'FP2.ForY')
     fig = plt.gcf()
     fig.savefig('../figures/vertical-grf-' + trial_number + '.png', dpi=300)
     plt.close(fig)
@@ -65,11 +64,11 @@ Nominal Speed: {} m/s, Gender: {}
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)
 
-    fig.set_size_inches( (14.0, 14.0) )
+    fig.set_size_inches((14.0, 14.0))
     fig.savefig('../figures/gains-' + trial_number + '.png', dpi=300)
     plt.close(fig)
 
-    fig, axes = utils.plot_validation(result[-1], walking_data.raw_data, vafs)
+    fig, axes = utils.plot_validation(result[-1], gait_data.data, vafs)
 
     fig.savefig('../figures/validation-' + trial_number + '.png', dpi=300)
     plt.close(fig)
@@ -81,24 +80,20 @@ similar_trials = utils.build_similar_trials(bad_subjects=[9])
 mean_gains_per_speed = {}
 
 for speed, trial_numbers in similar_trials.items():
-    mean_gains, var_gains = utils.mean_joint_isolated_gains(trial_numbers,
-                                                            sensor_labels,
-                                                            control_labels,
-                                                            20, 'longitudinal-perturbation')
+    mean_gains, var_gains = utils.mean_joint_isolated_gains(
+        trial_numbers, sensor_labels, control_labels, 20,
+        'longitudinal-perturbation')
     mean_gains_per_speed[speed] = mean_gains
 
     # TODO : This should plot the mean angles and rates from all the trials?
     # Right now it just uses the last trial.
-    fig, axes = utils.plot_joint_isolated_gains_better(sensor_labels,
-                                                       control_labels,
-                                                       mean_gains,
-                                                       var_gains,
-                                                       steps.mean(axis='items'))
+    fig, axes = utils.plot_joint_isolated_gains_better(
+        sensor_labels, control_labels, mean_gains, var_gains,
+        steps.mean(axis='items'))
 
-    fig.set_size_inches( (14.0, 14.0) )
+    fig.set_size_inches((14.0, 14.0))
     fig.savefig('../figures/mean-gains-' + speed + '.png', dpi=300)
     plt.close(fig)
-
 
 fig, axes = plt.subplots(3, 2, sharex=True)
 linestyles = ['-', '--', ':']

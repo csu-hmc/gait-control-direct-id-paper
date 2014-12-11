@@ -3,7 +3,6 @@
 # standard library
 import os
 import time
-#import random
 from collections import OrderedDict
 
 # external libs
@@ -14,7 +13,7 @@ import pandas
 import yaml
 from scipy.optimize import curve_fit
 from gaitanalysis import motek
-from gaitanalysis.gait import WalkingData, plot_steps
+from gaitanalysis.gait import GaitData, plot_gait_cycles
 from gaitanalysis.controlid import SimpleControlSolver
 from gaitanalysis.utils import _percent_formatter
 from dtk.process import coefficient_of_determination
@@ -236,17 +235,6 @@ def load_meta_data(meta_file_path):
     return meta_data
 
 
-def compute_ground_load_drift(trial_number):
-    # load data from "Force Plate Zeroing" and "Unloaded End"
-    # truncate the data from each section because in may contain some loaded
-    # portions
-    # concatentae the data
-    # fit a line through each force plate measurement
-    # output the slope and intercept for each load for that trial
-    event_data = write_event_data_frame_to_disk(trial_number, 'Force Plate Zeroing')
-    event_data = write_event_data_frame_to_disk(trial_number, 'Unloaded End')
-
-
 def merge_unperturbed_gait_cycles(trial_number, params):
     """Each trial has two one minute periods of unperturbed walking labeled:
 
@@ -263,21 +251,21 @@ def merge_unperturbed_gait_cycles(trial_number, params):
 
         event_data = write_event_data_frame_to_disk(trial_number, event)
         walk_data = write_inverse_dynamics_to_disk(*event_data)
-        step_data = section_signals_into_steps(*(list(walk_data) +
-                                                 list(params)))
+        step_data = section_into_gait_cycles(*(list(walk_data) +
+                                               list(params)))
 
         d[event]['event_data_frame'] = event_data[0]
         d[event]['meta_data'] = event_data[1]
         d[event]['event_data_path'] = event_data[2]
         d[event]['walking_data_path'] = walk_data[1]
-        d[event]['steps'] = step_data[0]
+        d[event]['gait_cycles'] = step_data[0]
         d[event]['walking_data'] = step_data[1]
 
-    normal_steps = pandas.concat((d['First Normal Walking']['steps'],
-                                  d['Second Normal Walking']['steps']),
-                                 ignore_index=True)
+    first = d['First Normal Walking']['gait_cycles']
+    second = d['Second Normal Walking']['gait_cycles']
+    normal_gait_cycles = pandas.concat((first, second), ignore_index=True)
 
-    return normal_steps, d
+    return normal_gait_cycles, d
 
 
 def write_event_data_frame_to_disk(trial_number,
@@ -341,7 +329,7 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
         inv_dyn_labels = \
             motek.markers_for_2D_inverse_dynamics(marker_set=marker_set)
 
-        walking_data = WalkingData(data_frame)
+        walking_data = GaitData(data_frame)
 
         subject_mass = meta_data['subject']['mass']
         args = list(inv_dyn_labels) + [subject_mass, inv_dyn_low_pass_cutoff]
@@ -353,59 +341,62 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
     else:
         print('Loading pre-computed inverse dynamics from {}.'.format(walking_data_path))
         f.close()
-        walking_data = WalkingData(walking_data_path)
+        walking_data = GaitData(walking_data_path)
 
     print('{:1.2f} s'.format(time.time() - start))
 
     return walking_data, walking_data_path
 
 
-def section_signals_into_steps(walking_data, walking_data_path,
-                               filter_frequency=10.0, threshold=30.0,
-                               num_samples_lower_bound=53,
-                               num_samples_upper_bound=132,
-                               num_samples=20, force=False):
-    """Computes inverse kinematics and dynamics and sections into steps."""
+def section_into_gait_cycles(gait_data, gait_data_path,
+                             filter_frequency=10.0,
+                             threshold=30.0,
+                             num_samples_lower_bound=53,
+                             num_samples_upper_bound=132,
+                             num_samples=20,
+                             force=False):
+    """Computes inverse dynamics then sections into gait cycles."""
 
     def getem():
         print('Finding the ground reaction force landmarks.')
         start = time.clock()
-        walking_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
-                                   filter_frequency=filter_frequency,
-                                   threshold=threshold)
+        gait_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
+                                filter_frequency=filter_frequency,
+                                threshold=threshold)
         print('{:1.2f} s'.format(time.clock() - start))
 
-        print('Spliting the data into steps.')
+        print('Spliting the data into gait cycles.')
         start = time.clock()
-        walking_data.split_at('right', num_samples=num_samples,
-                              belt_speed_column='RightBeltSpeed')
+        gait_data.split_at('right', num_samples=num_samples,
+                           belt_speed_column='RightBeltSpeed')
         print('{:1.2f} s'.format(time.clock() - start))
 
-        walking_data.save(walking_data_path)
+        gait_data.save(gait_data_path)
 
     try:
-        f = open(walking_data_path)
+        f = open(gait_data_path)
     except IOError:
         getem()
     else:
         f.close()
         start = time.clock()
-        walking_data = WalkingData(walking_data_path)
-        if not hasattr(walking_data, 'steps') or force is True:
+        gait_data = GaitData(gait_data_path)
+        if not hasattr(gait_data, 'gait_cycles') or force is True:
             getem()
         else:
-            print('Loading pre-computed steps from {}.'.format(walking_data_path))
+            msg = 'Loading pre-computed gait cycles from {}.'
+            print(msg.format(gait_data_path))
             print(time.clock() - start)
 
-    # Remove bad steps based on # samples in each step.
-    valid = (walking_data.step_data['Number of Samples'] <
+    # Remove bad gait cycles based on # samples in each step.
+    valid = (gait_data.gait_cycle_stats['Number of Samples'] <
              num_samples_upper_bound)
-    lower_values = walking_data.step_data[valid]
+    lower_values = gait_data.gait_cycle_stats[valid]
 
     valid = lower_values['Number of Samples'] > num_samples_lower_bound
     mid_values = lower_values[valid]
 
-    return walking_data.steps.iloc[mid_values.index], walking_data
+    return gait_data.gait_cycles.iloc[mid_values.index], gait_data
 
 
 def estimate_trunk_somersault_angle(data_frame):
@@ -437,9 +428,11 @@ def control_indices_for_specified():
     """Returns the indices of the control variables that provide the correct
     specified vector.
 
-    Given a list of control labels, this will provide the index of the specified vector
+    Given a list of control labels, this will provide the index of the
+    specified vector
 
-    This function is stupid and only works for this specific case and should produce:
+    This function is stupid and only works for this specific case and should
+    produce:
 
     [2, 1, 0, 5, 4, 3]
 
@@ -479,7 +472,7 @@ def load_state_specified_labels():
     states['ua'] = 'Trunk.Somersault.Rate'
     states['ub'] = 'Right.Hip.Flexion.Rate'
     states['uc'] = 'Right.Knee.Flexion.Rate'  # should be Extension
-    states['ud'] = 'Right.Ankle.PlantarFlexion.Rate' # should be Dorsi
+    states['ud'] = 'Right.Ankle.PlantarFlexion.Rate'  # should be Dorsi
     states['ue'] = 'Left.Hip.Flexion.Rate'
     states['uf'] = 'Left.Knee.Flexion.Rate'  # should be Extension
     states['ug'] = 'Left.Ankle.PlantarFlexion.Rate'  # should be Dorsi
@@ -524,7 +517,7 @@ def load_sensors_and_controls():
     return sensors, controls
 
 
-def find_joint_isolated_controller(steps, event_data_path):
+def find_joint_isolated_controller(gait_cycles, event_data_path):
     # Controller identification.
 
     event = '-'.join(event_data_path[:-3].split('-')[-2:])
@@ -538,18 +531,19 @@ def find_joint_isolated_controller(steps, event_data_path):
 
     sensors, controls = load_sensors_and_controls()
 
-    # Use the first 3/4 of the steps to compute the gains and validate on
-    # the last 1/4. Most runs seem to be about 500 steps.
-    num_steps = steps.shape[0]
-    solver = SimpleControlSolver(steps.iloc[:num_steps * 3 / 4],
+    # Use the first 3/4 of the gait cycles to compute the gains and validate on
+    # the last 1/4. Most runs seem to be about 500 gait cycles.
+    num_gait_cycles = gait_cycles.shape[0]
+    solver = SimpleControlSolver(gait_cycles.iloc[:num_gait_cycles * 3 / 4],
                                  sensors,
                                  controls,
-                                 validation_data=steps.iloc[num_steps * 3 / 4:])
+                                 validation_data=gait_cycles.iloc[num_gait_cycles * 3 / 4:])
 
     # Limit to angles and rates from one joint can only affect the moment at
     # that joint.
-    gain_omission_matrix = np.zeros((len(controls), len(sensors))).astype(bool)
-    for i, row in enumerate(gain_omission_matrix):
+    gain_inclusion_matrix = np.zeros((len(controls),
+                                     len(sensors))).astype(bool)
+    for i, row in enumerate(gain_inclusion_matrix):
         row[2 * i:2 * i + 2] = True
 
     try:
@@ -557,7 +551,7 @@ def find_joint_isolated_controller(steps, event_data_path):
         f.close()
         f = open(gain_data_npz_path)
     except IOError:
-        result = solver.solve(gain_omission_matrix=gain_omission_matrix)
+        result = solver.solve(gain_inclusion_matrix=gain_inclusion_matrix)
         print('Saving gains to:\n    {}\n    {}'.format(gain_data_npz_path,
                                                         gain_data_h5_path))
         # first items are numpy arrays
@@ -565,8 +559,8 @@ def find_joint_isolated_controller(steps, event_data_path):
         # the last item is a panel
         result[-1].to_hdf(gain_data_h5_path, event)
     else:
-        print('Loading pre-computed gains from:\n    {}\n    {}'.format(gain_data_npz_path,
-                                                                        gain_data_h5_path))
+        msg = 'Loading pre-computed gains from:\n    {}\n    {}'
+        print(msg.format(gain_data_npz_path, gain_data_h5_path))
         f.close()
         with np.load(gain_data_npz_path) as npz:
             result = [npz['arr_0'],
@@ -575,13 +569,13 @@ def find_joint_isolated_controller(steps, event_data_path):
                       npz['arr_3'],
                       npz['arr_4']]
         result.append(pandas.read_hdf(gain_data_h5_path, event))
-        solver.gain_omission_matrix = gain_omission_matrix
+        solver.gain_inclusion_matrix = gain_inclusion_matrix
 
     print('{:1.2f} s'.format(time.clock() - start))
 
     return sensors, controls, result, solver
 
-def find_full_gain_matrix_controller(steps, event_data_path):
+def find_full_gain_matrix_controller(gait_cycles, event_data_path):
     # Controller identification.
 
     event = '-'.join(event_data_path[:-3].split('-')[-2:])
@@ -595,13 +589,13 @@ def find_full_gain_matrix_controller(steps, event_data_path):
 
     sensors, controls = load_sensors_and_controls()
 
-    # Use the first 3/4 of the steps to compute the gains and validate on
-    # the last 1/4. Most runs seem to be about 500 steps.
-    num_steps = steps.shape[0]
-    solver = SimpleControlSolver(steps.iloc[:num_steps * 3 / 4],
+    # Use the first 3/4 of the gait cycles to compute the gains and validate on
+    # the last 1/4. Most runs seem to be about 500 gait cycles.
+    num_gait_cycles = gait_cycles.shape[0]
+    solver = SimpleControlSolver(gait_cycles.iloc[:num_gait_cycles * 3 / 4],
                                  sensors,
                                  controls,
-                                 validation_data=steps.iloc[num_steps * 3 / 4:])
+                                 validation_data=gait_cycles.iloc[num_gait_cycles * 3 / 4:])
 
     try:
         f = open(gain_data_h5_path)
@@ -616,8 +610,8 @@ def find_full_gain_matrix_controller(steps, event_data_path):
         # the last item is a panel
         result[-1].to_hdf(gain_data_h5_path, event)
     else:
-        print('Loading pre-computed gains from:\n    {}\n    {}'.format(gain_data_npz_path,
-                                                                        gain_data_h5_path))
+        msg = 'Loading pre-computed gains from:\n    {}\n    {}'
+        print(msg.format(gain_data_npz_path, gain_data_h5_path))
         f.close()
         with np.load(gain_data_npz_path) as npz:
             result = [npz['arr_0'],
@@ -748,9 +742,10 @@ def variance_accounted_for(estimated_panel, validation_panel, controls):
 def plot_validation(estimated_controls, continuous, vafs):
     print('Generating validation plot.')
     start = time.clock()
-    # get the first and last time of the estimated controls (just 10 steps)
-    beg_first_step = estimated_controls.iloc[0]['Original Time'][0]
-    end_last_step = estimated_controls.iloc[9]['Original Time'][-1]
+    # get the first and last time of the estimated controls (just 10 gait
+    # cycles)
+    beg_first_step = estimated_controls.iloc[0]['Original Time'].iloc[0]
+    end_last_step = estimated_controls.iloc[9]['Original Time'].iloc[-1]
     period = continuous[beg_first_step:end_last_step]
 
     # make plot for right and left legs
@@ -806,7 +801,8 @@ def plot_validation(estimated_controls, continuous, vafs):
     return fig, axes
 
 
-def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains, event):
+def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains,
+                              event):
 
     # TODO : If I could provide some uncertainty in the marker and ground
     # reaction load measurements, this could theorectically propogate to
@@ -825,7 +821,8 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains, event
                         len(sensors)))
 
     for i, trial_number in enumerate(trial_numbers):
-        file_name = 'joint-isolated-gain-data-{}-{}.npz'.format(trial_number, event)
+        template = 'joint-isolated-gain-data-{}-{}.npz'
+        file_name = template.format(trial_number, event)
         gain_data_npz_path = os.path.join(data_dir, file_name)
         with np.load(gain_data_npz_path) as npz:
             # n, q, p
@@ -840,7 +837,8 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains, event
     return mean_gains, var_gains
 
 
-def mean_gains(trial_numbers, sensors, controls, num_gains, event, controller):
+def mean_gains(trial_numbers, sensors, controls, num_gains, event,
+               controller):
 
     # TODO : If I could provide some uncertainty in the marker and ground
     # reaction load measurements, this could theorectically propogate to
@@ -859,7 +857,8 @@ def mean_gains(trial_numbers, sensors, controls, num_gains, event, controller):
                         len(sensors)))
 
     for i, trial_number in enumerate(trial_numbers):
-        file_name = '{}-gain-data-{}-{}.npz'.format(controller, trial_number, event)
+        template = '{}-gain-data-{}-{}.npz'
+        file_name = template.format(controller, trial_number, event)
         gain_data_npz_path = os.path.join(data_dir, file_name)
         with np.load(gain_data_npz_path) as npz:
             # n, q, p
@@ -983,13 +982,14 @@ def simulated_data_header_map():
 
     return header_map
 
+
 def plot_unperturbed_to_perturbed_comparision(trial_number):
     """This compares some select curves to show the difference in
     variability of perturbed to unperturbed walking."""
 
     params = settings[trial_number]
 
-    unperturbed_steps, other = \
+    unperturbed_gait_cycles, other = \
         merge_unperturbed_gait_cycles(trial_number, params)
 
     event_data_frame, meta_data, event_data_path = \
@@ -999,12 +999,12 @@ def plot_unperturbed_to_perturbed_comparision(trial_number):
         write_inverse_dynamics_to_disk(event_data_frame, meta_data,
                                        event_data_path)
 
-    perturbed_steps, walking_data = \
-        section_signals_into_steps(walking_data, walking_data_path,
-                                   filter_frequency=params[0],
-                                   threshold=params[1],
-                                   num_samples_lower_bound=params[2],
-                                   num_samples_upper_bound=params[3])
+    perturbed_gait_cycles, walking_data = \
+        section_into_gait_cycles(walking_data, walking_data_path,
+                                 filter_frequency=params[0],
+                                 threshold=params[1],
+                                 num_samples_lower_bound=params[2],
+                                 num_samples_upper_bound=params[3])
 
     variables = ['FP2.ForY',
                  'Right.Ankle.PlantarFlexion.Moment',
@@ -1013,19 +1013,19 @@ def plot_unperturbed_to_perturbed_comparision(trial_number):
 
     # The following can be used to use the same number of step for both
     # plots.
-    #num_steps = unperturbed_steps.shape[0]
-    #random_indices = random.sample(range(perturbed_steps.shape[0]), num_steps)
+    #num_gait_cycles = unperturbed_gait_cycles.shape[0]
+    #random_indices = random.sample(range(perturbed_gait_cycles.shape[0]),
+    #num_gait_cycles)
 
-    num_unperturbed_steps = unperturbed_steps.shape[0]
-    num_perturbed_steps = perturbed_steps.shape[0]
+    num_unperturbed_gait_cycles = unperturbed_gait_cycles.shape[0]
+    num_perturbed_gait_cycles = perturbed_gait_cycles.shape[0]
 
+    axes = plot_gait_cycles(perturbed_gait_cycles, *variables, mean=True)
+    axes = plot_gait_cycles(unperturbed_gait_cycles, *variables, mean=True,
+                            axes=axes, color='red')
 
-    axes = plot_steps(perturbed_steps, *variables, mean=True)
-    axes = plot_steps(unperturbed_steps, *variables, mean=True, axes=axes,
-                      color='red')
-
-    axes[0].legend(['Perturbed: {} cycles'.format(num_perturbed_steps),
-                    'Un-Perturbed: {} cycles'.format(num_unperturbed_steps)],
+    axes[0].legend(['Perturbed: {} cycles'.format(num_perturbed_gait_cycles),
+                    'Un-Perturbed: {} cycles'.format(num_unperturbed_gait_cycles)],
                    fontsize='8')
 
     figure_dir = '../figures'
@@ -1041,8 +1041,9 @@ def plot_unperturbed_to_perturbed_comparision(trial_number):
 
 
 def plot_joint_isolated_gains_better(sensor_labels, control_labels, gains,
-                                     gains_variance, mean_steps, axes=None,
-                                     show_gain_std=True, linestyle='-'):
+                                     gains_variance, mean_gait_cycles,
+                                     axes=None, show_gain_std=True,
+                                     linestyle='-'):
     """Plots a 3 x 3 subplot where the columns corresond to a joint (ankle,
     knee, hip). The top show shows the proportional gain plots and the
     bottom row shows the derivative gain plots. The middle row plots the
@@ -1058,7 +1059,7 @@ def plot_joint_isolated_gains_better(sensor_labels, control_labels, gains,
         The gains at each percent gait cycle.
     gains_variance : ndarray, shape(n, q, p)
         The variance of the gains at each percent gait cycle.
-    mean_steps : pandas.DataFrame
+    mean_gait_cycles : pandas.DataFrame
         The index should be percent gait cycle and the mean sensor values
         across the gait cycle should be in the columns.
 
@@ -1144,15 +1145,15 @@ def plot_joint_isolated_gains_better(sensor_labels, control_labels, gains,
                     angle_sensor = '.'.join([side, col, sign, 'Angle'])
                     rate_sensor = '.'.join([side, col, sign, 'Rate'])
                     if col == 'Ankle':
-                        angle = mean_steps[angle_sensor] + np.pi / 2.0
+                        angle = mean_gait_cycles[angle_sensor] + np.pi / 2.0
                     else:
-                        angle = mean_steps[angle_sensor]
-                    axes[i, j].plot(mean_steps.index.values.astype(float),
+                        angle = mean_gait_cycles[angle_sensor]
+                    axes[i, j].plot(mean_gait_cycles.index.values.astype(float),
                                     angle, 'k-')
                     axes[i, j].set_ylabel('rad')
                     rate_axis = axes[i, j].twinx()
-                    rate_axis.plot(mean_steps.index.values.astype(float),
-                                   mean_steps[rate_sensor], 'k:')
+                    rate_axis.plot(mean_gait_cycles.index.values.astype(float),
+                                   mean_gait_cycles[rate_sensor], 'k:')
                     rate_axis.set_ylabel('rad/s')
                     axes[i, j].set_title(r"Mean {} Joint Trajectories".format(col))
                     leg = axes[i, j].legend(('Angle',), loc=2,
