@@ -15,6 +15,9 @@ trial number :
  lower sample bound,
  upper sample bound)
 
+The trials listed here are all the ones that are potentially valid and
+suitable for longitudinal control identification.
+
 """
 
 settings = {
