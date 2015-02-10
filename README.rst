@@ -9,7 +9,7 @@ Analysis Toolkit.
 
 The notebooks can be viewed here:
 
-http://nbviewer.ipython.org/github/moorepants/walking-sys-id/tree/master/notebooks/
+http://nbviewer.ipython.org/github/csu-hmc/gait-control-direct-id-paper/tree/master/notebooks/
 
 All the materials in this repository are released under the `Creative Commons
 Attribution 4.0 License <http://creativecommons.org/licenses/by/4.0/>`_.
