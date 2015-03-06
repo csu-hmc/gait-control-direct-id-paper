@@ -3,7 +3,8 @@
 # standard library
 import os
 import time
-from collections import OrderedDict
+#import random
+from collections import OrderedDict, defaultdict
 
 # external libs
 import numpy as np
@@ -216,33 +217,73 @@ def trial_data_dir(default='.'):
     return trials_dir
 
 
-def generate_meta_data_table(trials_dir):
+def generate_meta_data_tables(trials_dir, top_level_key='TOP', key_sep='|'):
+    """Returns a dictionary of Pandas data frames, each one representing a
+    level in the nested meta data. The data frames are indexed by the trial
+    identification number.
 
-    trial_dirs = [x[0] for x in os.walk(trials_dir)]
+    Parameters
+    ----------
+    trials_dir : string
+        The path to a directory that contains trial directories.
 
-    keys_i_want = ['id', 'subject-id', 'datetime', 'notes', 'nominal-speed']
+    Returns
+    -------
+    tables : dictionary of pandas.Dataframe
+        The meta data tables indexed by trial identification number.
 
-    data = {}
-    for k in keys_i_want:
-        data.setdefault(k, [])
+    """
 
-    for directory in trial_dirs:
+    def walk_dict(d, key='TOP', key_sep='|'):
+        """Returns a dictionary of recursively extracted dictionaries."""
+        dicts = {}
+        e = {}
+        for k, v in d.items():
+            if isinstance(v, dict):
+                dicts.update(walk_dict(v, key + key_sep + k))
+            else:
+                e[k] = v
+                dicts[key] = e
+        return dicts
+
+    # TODO : The check for the 'T' doesn't work if the directory from
+    # os.walk is too short.
+    trial_dirs = [x[0] for x in os.walk(trials_dir) if x[0][-4] == 'T']
+
+    trial_nums = [x[-3:] for x in trial_dirs]
+
+    all_flattened_meta_data = {}
+
+    tables = {}
+
+    for directory, trial_num in zip(trial_dirs, trial_nums):
+        path = os.path.join(directory, 'meta-{}.yml'.format(trial_num))
         try:
-            f = open(os.path.join(directory,
-                                  'meta-{}.yml'.format(directory[-3:])))
+            f = open(path)
         except IOError:
+            print('No meta file in {}'.format(directory))
             pass
         else:
             meta_data = yaml.load(f)
-            trial_dic = meta_data['trial']
+            flattened_dict = walk_dict(meta_data, top_level_key, key_sep)
+            all_flattened_meta_data[trial_num] = flattened_dict
+            for table_name, table_row_dict in flattened_dict.items():
+                if table_name not in tables.keys():
+                    tables[table_name] = defaultdict(lambda: len(trial_nums)
+                                                     * [np.nan])
 
-            for key in keys_i_want:
-                try:
-                    data[key].append(trial_dic[key])
-                except KeyError:
-                    data[key].append(np.nan)
+    ordered_trial_nums = sorted(trial_nums)
 
-    return pandas.DataFrame(data)
+    for trial_num, flat_dict in all_flattened_meta_data.items():
+        trial_idx = ordered_trial_nums.index(trial_num)
+        for table_name, table_row_dict in flat_dict.items():
+            for col_name, row_val in table_row_dict.items():
+                tables[table_name][col_name][trial_idx] = row_val
+
+    for k, v in tables.items():
+        tables[k] = pandas.DataFrame(v, index=ordered_trial_nums)
+
+    return tables
 
 
 def get_subject_mass(meta_file_path):
