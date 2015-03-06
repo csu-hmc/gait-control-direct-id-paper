@@ -5,10 +5,8 @@
 To determine the gait landmarks (heelstrike and toeoff) across the
 longitudinally perturbed section of the data for each trial a low pass
 filter frequency and a threshold setting are needed to identify the
-landmarks.
-
-Different settings are requred for each trial to maximize the number of
-correctly identified gait cycles.
+landmarks. Different settings are required for each trial to maximize the
+number of correctly identified gait cycles.
 
 Furthermore, the incorrectly identified gait cycles are considered outliers
 and should be removed. The criteria for elimination is based on the
@@ -17,6 +15,9 @@ plotted and lower/upper bounds are chosen to eliminate the outliers.
 
 The choice of these four numbers is done manually for each trial in the
 interactive_gait_landmarks.ipynb notebook and then recorded here.
+
+This list also only includes trial numbers that are potentially useful for
+this study.
 
 The settings dictionary contains a key representing the trial number and a
 tuple of the four settings. For example:
