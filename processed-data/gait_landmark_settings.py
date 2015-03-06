@@ -1,13 +1,26 @@
+#!/usr/bin/env python
+
 """
-The gait landmarks (heelstrike and toeoff) are determined for each trial. A
-low pass filter frequency and a threshold setting are set to identify the
-landmarks across the longitudinally perturbed section of the the data. A
-different setting is used for each trial to maximize the number of correctly
-identified gait cycles. After the gait cycles are identified, a histogram of
-the number of samples in each gait cycle is plotted and lower/upper bounds
-are chosen to eliminate the outliers. The choice of these four numbers is
-done manually for each trial in the interactive_grf_landmarks.ipynb notebook
-and then recorded here.
+
+To determine the gait landmarks (heelstrike and toeoff) across the
+longitudinally perturbed section of the data for each trial a low pass
+filter frequency and a threshold setting are needed to identify the
+landmarks. Different settings are required for each trial to maximize the
+number of correctly identified gait cycles.
+
+Furthermore, the incorrectly identified gait cycles are considered outliers
+and should be removed. The criteria for elimination is based on the
+distribution of the number of samples in each gait cycle. The histogram is
+plotted and lower/upper bounds are chosen to eliminate the outliers.
+
+The choice of these four numbers is done manually for each trial in the
+interactive_gait_landmarks.ipynb notebook and then recorded here.
+
+This list also only includes trial numbers that are potentially useful for
+this study.
+
+The settings dictionary contains a key representing the trial number and a
+tuple of the four settings. For example:
 
 trial number :
 (gait landmark filter frequency,

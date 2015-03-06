@@ -12,7 +12,7 @@ and IPython notebooks.
 
 The notebooks can be viewed here:
 
-http://nbviewer.ipython.org/github/moorepants/walking-sys-id/tree/master/notebooks/
+http://nbviewer.ipython.org/github/csu-hmc/gait-control-direct-id-paper/tree/master/notebooks/
 
 Note that the following notebooks are currently not working with the latest
 GATK:

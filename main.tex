@@ -1,0 +1,260 @@
+\documentclass{article}
+
+% for images: png, pdf, etc
+\usepackage{graphicx}
+
+% for nice table formatting, i.e. /toprule, /midrule, etc
+\usepackage{booktabs}
+
+% to allow for \verb++ declarations in captions.
+\usepackage{cprotect}
+
+% for nice source code syntax highlighting, also provides Listing env
+%\usepackage{minted}
+
+% for nice units
+\usepackage{siunitx}
+
+% for nice todo notes
+\usepackage{todonotes}
+
+\author{Jason K. Moore and Antonie van den Bogert}
+
+\title{Direct Control Identification in Human Gait}
+
+\date{}
+
+\begin{document}
+
+\section*{TODO}
+
+\listoftodos
+
+\section*{Introduction}
+%
+Recent research and commercial activity indicate that gait-related powered
+prosthetics will play an important role in both assisting humans with
+disabilities and enhancing the abities of able bodied. These devices include a
+variety of sensors and actuators than can be coupled to a control system to
+provide acutated gait assistance. However, for example, the available
+lightweight lower extremity exoskeletons lack gait that resembles an
+able-bodied human. It is difficult to design a controller from first principles
+for this very non-linear system. Although work based on \cite{Geyer2010} are
+giving promising results in simulated musculoskeletal systems \cite{Wang2010,
+Geitenbeek2014}. Even though constraining the controller to rudimentary models
+of the muscoulo skeleteal system is fruitful, we are curious if more generic
+black box control models can reveal more robust controllers. To improve the
+gait of powered prosthetics, our intent is to identify a simple, linear
+controller from a large set of data collected from able-bodied subjects being
+perturbed by random longitudinal forces.
+
+There are other researchers thinking along these lines. Elliot Rouse identified
+the parameters of a linear model of the ankle's passive and active stiffness
+and damping by perturbing around 400 stance phases of the gait cycle and
+fitting a model with linear least squares. \cite{Wang2013} are able to predict
+the foot placement with a simple lienar model derived from kinematic data.
+%
+\section*{Methods}
+%
+\subsection{Experimental}
+%
+We make use of a subset of the the data reported in \cite{Moore2015}. The
+results are based on \todo{need number of subjects} subjects walking at 3 speeds on
+a treadmill with and without longitudinal perturbations.
+
+\todo[inline]{list all the subject stats}
+\todo[inline]{list all the trial numbers, probably should make a table}
+
+\subsection{Data Preprocessing}
+%
+We make use of the GaitAnalysisToolKit to process the data with these basic
+steps:
+
+\begin{itemize}
+  \item Identify missing data.
+  \item Replace missing data with linearly interpolated values.
+  \item Filter all signals with a 2nd order low pass Butterworth filter with a
+    cutoff frequency of 6~\si{\hertz}
+  \item Compute the planar inverse dynamics for the lower body: right and left
+    ankle, knee, hip joint angles and joint torques.
+  \item Identify the heelstrikes based on the vertical ground reaction force.
+  \item Segment each trial into gait cycles and interpolate the data in each
+    gait cycle at a specific number of data points.
+  \item Throw out any bad gait cycles.
+\end{itemize}
+
+\missingfigure{Add figure of single trial joint angles/torques with std across
+  gait cycles.}
+
+\subsection{Controller}
+\label{sec:controller}
+%
+We assume a black box~\footnote{black box in the system identification sense,
+i.e. there are parameters in the model} control structure for the closed loop
+system, Figure~\ref{fig:controller}. We first assume there is a non-linear
+plant, i.e. the open loop musculoskeletal system, that has a time varying
+state. This plant can be perturbed by an external exogenous input $w(t)$, in
+our case the varying belt speed, and also driven by joint torques
+$\mathbf{m}(t)$. We also assume that there is a nomimal gait phase dependent
+reference trajectory $\mathbf{s}_0(\varphi)$ that describes the gait phase
+varying state for cyclic gait when no feedback is necessary. There are then
+nomimal gait phase dependent joint torques $\mathbf{m}_0(\varphi)$ that
+correspond to these nominal trajectories. We then assume that when the actual
+state deviates from the nominal state trajectory that the controller computes
+additive joint torques based on the state tractory error to compensate for
+variation in gait away from the nomimal. The controller is designated as a gait
+phase scheduled gain matrix, $\mathbf{K}(\varphi)$ that relates the error in
+the state trajectories to the additive joint torques. The controller structure
+bounded by the box in Figure~\ref{fig:controlelr} can be described by the
+following algebraic equation. It is important to note that this control
+structure will effectively lump the passive control gains with the active ones
+in addition to any other unmodeled effects. This is desirable for our
+intentions, as we are only concerned with mapping this identified controller to
+that of powered prosthetic device and it is thuse unnessary to distinguish
+between these.
+%
+\begin{equation}
+  \mathbf{m}(t) = \mathbf{m}_0(\varphi) + \mathbf{K}(\varphi) [\mathbf{s}_0(\varphi) - \mathbf{s}(t)]
+  \label{eq:controller}
+\end{equation}
+
+\begin{figure}
+  \begin{center}
+    \includegraphics{figures/control-system-detailed.pdf}
+    \caption{The controller block diagram}
+    \label{fig:controller}
+  \end{center}
+\end{figure}
+
+\subsection{Direct Identification}
+%
+We employ a direct identification approach to find the optimal parameters for
+the control structure described in Section~\ref{sec:controller}. Direct
+identifcation has it's drawbacks. It is well known that process noise due to
+unmodeled affects in the identification model will bias the results towards the
+inverse of the plant if the external perturbations are not sufficiently large
+enough~\cite{Ljung1999,Kearney1990,Kooij2005}. Determining if the perturbations
+are of large enough size is difficult because the process noise is generally
+unknown.
+
+\todo[inline]{I need to explain why we think our perturbations may be large
+  enough in magnitude. The problem is that we get similiar identification
+  results from both unpertrubed and perturbed data. THis can mean one of two
+  things: (1) the person perturbs themselves enough and the identification is
+  correct either way or (2) our perturbations are not enough, i.e. we'd get
+  different results by perturbing more. The only thing that I can think of here
+  is to show the necessary perturbation level for the quiet standing case and
+  then say that we have similar magnitudes.}
+
+We reformulate Equation~\ref{eq:controller} to make it amenable to linear
+identifaction. The equation can be rewritten so that is linear in the gains and
+a new term $\mathbf{m}^*$.
+%
+\begin{equation}
+  \mathbf{m}(t) = \mathbf{m}^*(\varphi) - \mathbf{K}(\varphi) \mathbf{s}(t)
+\end{equation}
+%
+where
+%
+\begin{equation}
+  \mathbf{m}^*(t) = \mathbf{m}_0(\varphi) + \mathbf{K}(\varphi) \mathbf{s}_0(\varphi)
+\end{equation}
+
+Assuming that we can collect noisy measurements and estimate $\mathbf{m}(t)$
+and $\mathbf{s}(t)$, $\mathbf{m}^*(\varphi)$ and $\mathbf{K}(\varphi)$ are
+identified simply by using linear least squares to regress the data. Given $m$
+gait cycles with $n$ time steps in each gait cycle with $q$ controls and $p$
+sensors there are $nq(p + 1)$ unknowns and $mnq$ equations so we need at least
+$p + 1$ gait cycles to solve for the unknowns.
+
+Details of forming $\mathbf{Ax}=\mathbf{b}$ from Equation~\ref{eq:linear} can
+be found in the supplementary IPython notebook \verb|form_linear_system.ipynb|.
+
+We compute the scheduled gains and $\mathbf{m}^*$ for both the unperturbed and
+perturbed gait cycles for each trial. Three quarters of the data from each
+series of gait cycles are used to compute the unknowns and the model is
+validated against the remaining one quarter of the data. We compute the
+percentatge of variance accounted for by the model with respect to the
+validation data set to gauage how well the model predicts.
+
+\todo[inline]{Add VAF equation}
+
+\todo[inline]{Merge the stuff below with stuff above}
+
+Joint angle, rate, and torque time series were sectioned into steps based on
+the right foot's heel strike. Subsequently, 20 evenly spaced data points from
+each series were interpolated along the gait cycle. We assume a simple
+scheduled proportional derivative controller that generates the joint torques
+given the joint angles and rates that fits the following form.
+%
+\begin{equation}
+  \mathbf{m}(t) = \mathbf{m}^*(\varphi(t)) -
+  \mathbf{K}(\varphi(t))\mathbf{s}(t)
+\end{equation}
+%
+where $t$ is an instance of time, $\varphi(t)$ is the phase in the right leg
+gait cycle, $\mathbf{m}(t)$ is a vector of joint torques,
+$\mathbf{m}^*(\varphi(t))$ is a vector of the nominal joint torques,
+$\mathbf{K}(\varphi(t))$ is a gain matrix scheduled with respect to gait
+phase which multiplies the vector of joint angles and rates, $\mathbf{s}(t)$.
+This equation is linear in the gains and the reference torques. Given
+sufficient joint angle, rate, and torque measurements, the reference torques
+and the gains can be solved for using linear least squares.
+
+\section{Results}
+%
+\subsection{Example Result}
+%
+The example data shown here was collected from a single subject (age: 29, mass:
+63 kg, height: 172 cm) walking on an instrumented treadmill (V-Gait, Motek
+Medical). The subject was longitudinally perturbed using random white noise
+with 10\% std around a nominal 1.2 m/s belt speed. Data was recorded for 8
+minutes at 100 Hz, which included approximately 500 steps of walking. Ankle
+plantarflexion, knee flexion, and hip flexion angles, rates, and moments were
+computed using 2D inverse dynamics.
+%
+\begin{figure}[hbt]
+  \begin{center}
+    \includegraphics[width=\columnwidth]{fig/gains.pdf}
+    \caption{Gait phase percent scheduled gains for right (blue) and left (red) legs.}
+    \label{fig:gains}
+  \end{center}
+\end{figure}
+
+Here we present an example result from a controller structure which is limited
+to joint torque generation only from error in the sensors from the same joint.
+Figure \ref{fig:gains} shows the estimates of the scheduled gains with respect
+to the percent gait cycle in each leg. Figure \ref{fig:fit} demonstrates an
+example prediction of the measured ankle plantarflexion torque in the right leg
+by the identified control model.
+%
+\begin{figure}[b]
+  \begin{center}
+    \includegraphics[width=\columnwidth]{fig/fit.pdf}
+    \caption{Predicted torque compared to independent validation data.}
+    \label{fig:fit}
+  \end{center}
+\end{figure}
+%
+\subsection{$\mathbf{m}^*$ accounts for most of the variation}
+%
+\subsection{Random variations predict random gains}
+%
+\subsection{Similar gains are predicted from both unperturbed and perturbed}
+%
+\section*{Discussion}
+%
+We are able to identify a simple linear controller that exhibits larger gains
+in the stance phase than in the swing phase. Additionally, similar gain
+patterns in the right and left legs are observed that use both positive and
+negative feedback. The controller is capable of predicting the measured joint
+torques with greater than 65\% VAF in all joints. Results and conclusions from
+a larger sample of subjects and conditions will be presented at the conference.
+
+
+%\section*{Acknowledgments}
+%
+%This research was funded by the Ohio's Wright Center for Sensor Systems
+%Engineering and the Parker Hannifin Corporation.
+
+\end{document}

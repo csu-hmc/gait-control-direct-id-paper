@@ -21,6 +21,40 @@ from dtk.process import coefficient_of_determination
 from grf_landmark_settings import settings
 
 
+def config_paths():
+    """Returns the full paths to the directories specified in the config.yml
+    file.
+
+    Returns
+    -------
+    paths : dictionary
+        Absolute paths to the various directories.
+
+    """
+
+    this_script_path = os.path.realpath(__file__)
+    src_dir = os.path.dirname(this_script_path)
+    root_dir = os.path.realpath(os.path.join(src_dir, '..'))
+
+    try:
+        with open(os.path.join(root_dir, 'config.yml'), 'r') as f:
+            config = yaml.load(f)
+    except IOError:
+        with open(os.path.join(root_dir, 'default-config.yml'), 'r') as f:
+            config = yaml.load(f)
+
+    paths = {}
+    for name, dir_name in config.items():
+        dir_path = os.path.join(root_dir, dir_name)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+        paths[name] = dir_path
+
+    paths['project_root'] = root_dir
+
+    return paths
+
+
 def load_open_loop_trajectories():
     """Returns an optimal solution of the open loop trajectories of the 7
     link planar walker for a single gait cycle.
