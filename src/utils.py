@@ -22,6 +22,14 @@ from dtk.process import coefficient_of_determination
 from grf_landmark_settings import settings
 
 
+def mkdir(directory):
+    """Creates a directory if it does not exist, otherwise it does nothing.
+    Returns the absolut path to the directory."""
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    return os.path.abspath(directory)
+
+
 def config_paths():
     """Returns the full paths to the directories specified in the config.yml
     file.
@@ -348,10 +356,13 @@ def write_event_data_frame_to_disk(trial_number,
 
     start = time.clock()
 
-    trials_dir = trial_data_dir()
+    paths = config_paths()
+
+    trials_dir = paths['raw_data_dir']
+    tmp_dir = paths['processed_data_dir']
+
     file_paths = trial_file_paths(trials_dir, trial_number)
 
-    tmp_dir = tmp_data_dir()
     event_data_path = os.path.join(tmp_dir, 'cleaned-data-' + trial_number +
                                    '-' + '-'.join(event.lower().split(' ')) +
                                    '.h5')
@@ -366,7 +377,7 @@ def write_event_data_frame_to_disk(trial_number,
             dflow_data.extract_processed_data(event=event,
                                               index_col='TimeStamp',
                                               isb_coordinates=True)
-        # TODO: Change the event name in the HDF5 file into one that is
+        # TODO : Change the event name in the HDF5 file into one that is
         # natural naming compliant for PyTables.
         print('Saving cleaned data: {}'.format(event_data_path))
         event_data_frame.to_hdf(event_data_path, event)
@@ -414,7 +425,8 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
         print('Saving inverse dynamics to {}.'.format(walking_data_path))
         walking_data.save(walking_data_path)
     else:
-        print('Loading pre-computed inverse dynamics from {}.'.format(walking_data_path))
+        msg = 'Loading pre-computed inverse dynamics from {}.'
+        print(msg.format(walking_data_path))
         f.close()
         walking_data = GaitData(walking_data_path)
 
@@ -883,7 +895,7 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains,
     # reaction load measurements, this could theorectically propogate to
     # here through the linear least squares fit.
 
-    data_dir = tmp_data_dir()
+    data_dir = config_paths()['process_data_dir']
 
     all_gains = np.zeros((len(trial_numbers),
                           num_gains,
@@ -919,7 +931,7 @@ def mean_gains(trial_numbers, sensors, controls, num_gains, event,
     # reaction load measurements, this could theorectically propogate to
     # here through the linear least squares fit.
 
-    data_dir = tmp_data_dir()
+    data_dir = config_paths()['processed_data_dir']
 
     all_gains = np.zeros((len(trial_numbers),
                           num_gains,

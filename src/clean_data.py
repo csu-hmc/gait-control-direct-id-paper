@@ -1,19 +1,29 @@
 #!/usr/bin/env python
 
+"""This script preprocessed the data, creates some plots that show how well
+the preprocessing went, and then identifies the joint isolated controller
+and plots the results."""
+
+# builtin
+import sys
+import os
+
 # external
 import matplotlib.pyplot as plt
 from gaitanalysis.gait import plot_gait_cycles
 
 # local
 import utils
-from grf_landmark_settings import settings
-
+paths = utils.config_paths()
+sys.path.append(paths['processed_data_dir'])
+from gait_landmark_settings import settings
 
 for trial_number, params in settings.items():
     msg = 'Identifying controller for trial #{}'.format(trial_number)
     print(msg)
     print('=' * len(msg))
 
+    # Preprocessing
     event_data_frame, meta_data, event_data_path = \
         utils.write_event_data_frame_to_disk(trial_number)
 
@@ -28,18 +38,23 @@ for trial_number, params in settings.items():
                                        num_samples_lower_bound=params[2],
                                        num_samples_upper_bound=params[3])
 
-    # This plot is for all gait cycles (bad ones haven't been dropped).
+    # This plot shows all gait cycles (bad ones haven't been dropped).
     axes = gait_data.gait_cycle_stats.hist()
     fig = plt.gcf()
-    fig.savefig('../figures/step-data-' + trial_number + '.png', dpi=300)
+    hist_dir = utils.mkdir(os.path.join(paths['figures_dir'],
+                                        'gait-cycle-histograms'))
+    fig.savefig(os.path.join(hist_dir, trial_number + '.png'), dpi=300)
     plt.close(fig)
 
     # This will plot only the good steps.
     axes = plot_gait_cycles(steps, 'FP2.ForY')
     fig = plt.gcf()
-    fig.savefig('../figures/vertical-grf-' + trial_number + '.png', dpi=300)
+    grf_dir = utils.mkdir(os.path.join(paths['figures_dir'],
+                                       'vertical-grfs'))
+    fig.savefig(os.path.join(grf_dir, trial_number + '.png'), dpi=300)
     plt.close(fig)
 
+    # Identification
     sensor_labels, control_labels, result, solver = \
         utils.find_joint_isolated_controller(steps, event_data_path)
 
@@ -53,6 +68,9 @@ for trial_number, params in settings.items():
 
     id_num_steps = solver.identification_data.shape[0]
 
+    joint_dir = utils.mkdir(os.path.join(paths['figures_dir'],
+                                         'joint-isolated'))
+
     title = """\
 Scheduled Gains Identified from {} Gait Cycles in Trial {}
 Nominal Speed: {} m/s, Gender: {}
@@ -65,12 +83,14 @@ Nominal Speed: {} m/s, Gender: {}
     plt.subplots_adjust(top=0.85)
 
     fig.set_size_inches((14.0, 14.0))
-    fig.savefig('../figures/gains-' + trial_number + '.png', dpi=300)
+    fig.savefig(os.path.join(joint_dir, 'gains-' + trial_number + '.png'),
+                dpi=300)
     plt.close(fig)
 
     fig, axes = utils.plot_validation(result[-1], gait_data.data, vafs)
 
-    fig.savefig('../figures/validation-' + trial_number + '.png', dpi=300)
+    fig.savefig(os.path.join(joint_dir, 'validation-' + trial_number +
+                             '.png'), dpi=300)
     plt.close(fig)
 
 # Do not include subject 9 in the means because of the odd ankle joint
@@ -92,7 +112,8 @@ for speed, trial_numbers in similar_trials.items():
         steps.mean(axis='items'))
 
     fig.set_size_inches((14.0, 14.0))
-    fig.savefig('../figures/mean-gains-' + speed + '.png', dpi=300)
+    fig.savefig(os.path.join(joint_dir, 'mean-gains-' + speed + '.png'),
+                dpi=300)
     plt.close(fig)
 
 fig, axes = plt.subplots(3, 2, sharex=True)
@@ -113,5 +134,5 @@ leg = axes[1, 0].legend(list(sum(zip(right_labels, left_labels), ())),
                         loc='best', fancybox=True, fontsize=8)
 leg.get_frame().set_alpha(0.75)
 
-fig.savefig('../figures/mean-gains-vs-speed.png', dpi=300)
+fig.savefig(os.path.join(joint_dir, 'mean-gains-vs-speed.png'), dpi=300)
 plt.close(fig)
