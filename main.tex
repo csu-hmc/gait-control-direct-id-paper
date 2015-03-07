@@ -26,6 +26,8 @@
 
 \begin{document}
 
+\maketitle
+
 \section*{TODO}
 
 \listoftodos
@@ -56,7 +58,7 @@ the foot placement with a simple lienar model derived from kinematic data.
 %
 \section*{Methods}
 %
-\subsection{Experimental}
+\subsection*{Experiments}
 %
 We make use of a subset of the the data reported in \cite{Moore2015} and refer
 the reader to that publication for more details about the experiments and data.
@@ -76,7 +78,7 @@ detail parameters are given in Table~\ref{tab:subjects}.
   \label{tab:subjects}
 \end{table}
 
-\subsection{Data Preprocessing}
+\subsection*{Data Preprocessing}
 %
 The ``raw'' data provided by \cite{Moore2015} consists of 100~\si{\hertx} time
 series of marker and ground reaction loads in addition to event time
@@ -106,7 +108,7 @@ these basic steps:
 
 \missingfigure{Add figure of the variation in gait cycle stats.}
 
-\subsection{Controller}
+\subsection*{Controller}
 \label{sec:controller}
 %
 We assume a black box~\footnote{black box in the system identification sense,
@@ -146,7 +148,7 @@ between these.
   \end{center}
 \end{figure}
 
-\subsection{Direct Identification}
+\subsection*{Direct Identification}
 %
 We employ a direct identification approach to find the optimal parameters for
 the control structure described in Section~\ref{sec:controller}. Direct
@@ -221,7 +223,7 @@ This equation is linear in the gains and the reference torques. Given
 sufficient joint angle, rate, and torque measurements, the reference torques
 and the gains can be solved for using linear least squares.
 
-\section{Results}
+\section*{Results}
 %
 \subsection{Example Result}
 %
@@ -256,11 +258,11 @@ by the identified control model.
   \end{center}
 \end{figure}
 %
-\subsection{$\mathbf{m}^*$ accounts for most of the variation}
+\subsection*{$\mathbf{m}^*$ accounts for most of the variation}
 %
-\subsection{Random variations predict random gains}
+\subsection*{Random variations predict random gains}
 %
-\subsection{Similar gains are predicted from both unperturbed and perturbed}
+\subsection*{Similar gains are predicted from both unperturbed and perturbed}
 %
 \section*{Discussion}
 %
@@ -270,7 +272,6 @@ patterns in the right and left legs are observed that use both positive and
 negative feedback. The controller is capable of predicting the measured joint
 torques with greater than 65\% VAF in all joints. Results and conclusions from
 a larger sample of subjects and conditions will be presented at the conference.
-
 
 %\section*{Acknowledgments}
 %
