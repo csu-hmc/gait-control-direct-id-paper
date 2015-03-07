@@ -3,14 +3,13 @@
 # standard library
 import os
 import time
-#import random
 from collections import OrderedDict, defaultdict
 
 # external libs
 import numpy as np
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
-import pandas
+import pandas as pd
 import yaml
 from scipy.optimize import curve_fit
 from gaitanalysis import motek
@@ -289,9 +288,153 @@ def generate_meta_data_tables(trials_dir, top_level_key='TOP', key_sep='|'):
                 tables[table_name][col_name][trial_idx] = row_val
 
     for k, v in tables.items():
-        tables[k] = pandas.DataFrame(v, index=ordered_trial_nums)
+        tables[k] = pd.DataFrame(v, index=ordered_trial_nums)
 
     return tables
+
+
+def measured_subject_mass(raw_data_dir, processed_data_dir):
+    """This script computes the mean mass of each subject based on the force
+    plate data collected just after the calibration pose. It also compares
+    it to the mass provided by the subject. Some subjects may have invalid
+    measurements and will not be included, so you should make use of the
+    self reported mass.
+
+    Parameters
+    ----------
+    raw_data_dir : string
+        The path to the raw data directory.
+    processed_data_dir : string
+        The path to the processed data directory.
+
+    Returns
+    -------
+    mean : pandas.DataFrame
+        A data frame containing columns with mean/std measured mass, the
+        self reported mass, and indexed by subject id.
+
+    """
+    # Subject 0 is for the null subject. For subject 1 we use the self
+    # reported value because there is no "Calibration Pose" event. For
+    # subject 11 and subject 4, we use the self reported mass because the
+    # wooden feet were in place and the force measurements are
+    # untrust-worthy.
+    subj_with_invalid_meas = [0, 1, 4, 11]
+
+    # Some of the trials have anomalies in the data after the calibration
+    # pose due to the subjects' movement. The following gives best estimates
+    # of the sections of the event that are suitable to use in the subjects'
+    # mass computation. The entire time series during the "Calibration Pose"
+    # event is acceptable for trials not listed.
+    time_sections = {'020': (None, 14.0),
+                     '021': (None, 14.0),
+                     '031': (-14.0, None),
+                     '047': (None, 12.0),
+                     '048': (None, 7.0),
+                     '055': (-12.0, None),
+                     '056': (-3.0, None),  # also the first 2 seconds are good
+                     '057': (-8.0, None),
+                     '063': (None, 6.0),  # also the last 6 seconds are good
+                     '069': (None, 14.0),
+                     '078': (None, 15.0)}
+
+    trial_dirs = [x[0] for x in os.walk(raw_data_dir) if x[0][-4] == 'T']
+    trial_nums = [x[-3:] for x in trial_dirs if x[-3:] not in ['001', '002']]
+
+    event = 'Calibration Pose'
+
+    tmp_file_name = '_'.join(event.lower().split(' ')) + '.h5'
+    tmp_data_path = os.path.join(processed_data_dir, tmp_file_name)
+
+    if not os.path.exists(processed_data_dir):
+        os.makedirs(processed_data_dir)
+
+    subject_data = defaultdict(list)
+
+    for trial_number in trial_nums:
+
+        dflow_data = motek.DFlowData(*trial_file_paths(raw_data_dir,
+                                                       trial_number))
+
+        subject_id = dflow_data.meta['subject']['id']
+
+        if subject_id not in subj_with_invalid_meas:
+
+            msg = 'Computing Mass for Trial #{}, Subject #{}'
+            print(msg.format(trial_number, subject_id))
+            print('=' * len(msg))
+
+            try:
+                f = open(tmp_data_path, 'r')
+                df = pd.read_hdf(tmp_data_path, 'T' + trial_number)
+            except (IOError, KeyError):
+                print('Loading raw data files and cleaning...')
+                dflow_data.clean_data(ignore_hbm=True)
+                df = dflow_data.extract_processed_data(event=event,
+                                                       index_col='TimeStamp',
+                                                       isb_coordinates=True)
+                df.to_hdf(tmp_data_path, 'T' + trial_number)
+            else:
+                msg = 'Loading preprocessed {} data from file...'
+                print(msg.format(event))
+                f.close()
+
+            # This is the time varying mass during the calibration pose.
+            df['Mass'] = (df['FP1.ForY'] + df['FP1.ForY']) / 9.81
+
+            # This sets the slice indices so that only the portion of the
+            # time series with valid data is used to compute the mass.
+            if trial_number in time_sections:
+                start = time_sections[trial_number][0]
+                stop = time_sections[trial_number][1]
+                if start is None:
+                    stop = df.index[0] + stop
+                elif stop is None:
+                    start = df.index[-1] + start
+            else:
+                start = None
+                stop = None
+
+            valid = df['Mass'].loc[start:stop]
+
+            actual_mass = valid.mean()
+            std = valid.std()
+
+            reported_mass = dflow_data.meta['subject']['mass']
+
+            subject_data['Trial Number'].append(trial_number)
+            subject_data['Subject ID'].append(dflow_data.meta['subject']['id'])
+            subject_data['Self Reported Mass'].append(reported_mass)
+            subject_data['Mean Measured Mass'].append(actual_mass)
+            subject_data['Measured Mass Std. Dev.'].append(std)
+            subject_data['Gender'].append(dflow_data.meta['subject']['gender'])
+
+            print("Measured mass: {} kg".format(actual_mass))
+            print("Self reported mass: {} kg".format(reported_mass))
+            print("\n")
+
+        else:
+
+            pass
+
+    subject_df = pd.DataFrame(subject_data)
+
+    grouped = subject_df.groupby('Subject ID')
+
+    mean = grouped.mean()
+
+    mean['Diff'] = mean['Mean Measured Mass'] - mean['Self Reported Mass']
+
+    # This sets the grouped standard deviation to the correct value
+    # following uncertainty propagation for the mean function.
+
+    def uncert(x):
+        return np.sqrt(np.sum(x**2) / len(x))
+
+    mean['Measured Mass Std. Dev.'] = \
+        grouped.agg({'Measured Mass Std. Dev.': uncert})
+
+    return mean
 
 
 def get_subject_mass(meta_file_path):
@@ -346,7 +489,7 @@ def merge_unperturbed_gait_cycles(trial_number, params):
 
     first = d['First Normal Walking']['gait_cycles']
     second = d['Second Normal Walking']['gait_cycles']
-    normal_gait_cycles = pandas.concat((first, second), ignore_index=True)
+    normal_gait_cycles = pd.concat((first, second), ignore_index=True)
 
     return normal_gait_cycles, d
 
@@ -384,7 +527,7 @@ def write_event_data_frame_to_disk(trial_number,
     else:
         print('Loading pre-cleaned data: {}'.format(event_data_path))
         f.close()
-        event_data_frame = pandas.read_hdf(event_data_path, event)
+        event_data_frame = pd.read_hdf(event_data_path, event)
 
     meta_data = load_meta_data(file_paths[2])
 
@@ -655,12 +798,13 @@ def find_joint_isolated_controller(gait_cycles, event_data_path):
                       npz['arr_2'],
                       npz['arr_3'],
                       npz['arr_4']]
-        result.append(pandas.read_hdf(gain_data_h5_path, event))
+        result.append(pd.read_hdf(gain_data_h5_path, event))
         solver.gain_inclusion_matrix = gain_inclusion_matrix
 
     print('{:1.2f} s'.format(time.clock() - start))
 
     return sensors, controls, result, solver
+
 
 def find_full_gain_matrix_controller(gait_cycles, event_data_path):
     # Controller identification.
@@ -706,7 +850,7 @@ def find_full_gain_matrix_controller(gait_cycles, event_data_path):
                       npz['arr_2'],
                       npz['arr_3'],
                       npz['arr_4']]
-        result.append(pandas.read_hdf(gain_data_h5_path, event))
+        result.append(pd.read_hdf(gain_data_h5_path, event))
 
     print('{:1.2f} s'.format(time.clock() - start))
 
@@ -807,11 +951,11 @@ def plot_joint_isolated_gains(sensor_labels, control_labels, gains,
 def variance_accounted_for(estimated_panel, validation_panel, controls):
     """Returns a dictionary of R^2 values for each control."""
 
-    estimated_walking = pandas.concat([df for k, df in
+    estimated_walking = pd.concat([df for k, df in
                                        estimated_panel.iteritems()],
                                       ignore_index=True)
 
-    actual_walking = pandas.concat([df for k, df in
+    actual_walking = pd.concat([df for k, df in
                                     validation_panel.iteritems()],
                                    ignore_index=True)
 
