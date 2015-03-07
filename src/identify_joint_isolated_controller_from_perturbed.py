@@ -5,7 +5,6 @@ the preprocessing went, and then identifies the joint isolated controller
 and plots the results."""
 
 # builtin
-import sys
 import os
 
 # external
@@ -14,9 +13,9 @@ from gaitanalysis.gait import plot_gait_cycles
 
 # local
 import utils
-paths = utils.config_paths()
-sys.path.append(paths['processed_data_dir'])
 from gait_landmark_settings import settings
+
+PATHS = utils.config_paths()
 
 for trial_number, params in settings.items():
     msg = 'Identifying controller for trial #{}'.format(trial_number)
@@ -41,7 +40,7 @@ for trial_number, params in settings.items():
     # This plot shows all gait cycles (bad ones haven't been dropped).
     axes = gait_data.gait_cycle_stats.hist()
     fig = plt.gcf()
-    hist_dir = utils.mkdir(os.path.join(paths['figures_dir'],
+    hist_dir = utils.mkdir(os.path.join(PATHS['figures_dir'],
                                         'gait-cycle-histograms'))
     fig.savefig(os.path.join(hist_dir, trial_number + '.png'), dpi=300)
     plt.close(fig)
@@ -49,7 +48,7 @@ for trial_number, params in settings.items():
     # This will plot only the good steps.
     axes = plot_gait_cycles(steps, 'FP2.ForY')
     fig = plt.gcf()
-    grf_dir = utils.mkdir(os.path.join(paths['figures_dir'],
+    grf_dir = utils.mkdir(os.path.join(PATHS['figures_dir'],
                                        'vertical-grfs'))
     fig.savefig(os.path.join(grf_dir, trial_number + '.png'), dpi=300)
     plt.close(fig)
@@ -68,7 +67,7 @@ for trial_number, params in settings.items():
 
     id_num_steps = solver.identification_data.shape[0]
 
-    joint_dir = utils.mkdir(os.path.join(paths['figures_dir'],
+    joint_dir = utils.mkdir(os.path.join(PATHS['figures_dir'],
                                          'joint-isolated'))
 
     title = """\
