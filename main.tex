@@ -63,9 +63,9 @@ the foot placement with a simple lienar model derived from kinematic data.
 We make use of a subset of the the data reported in \cite{Moore2015} and refer
 the reader to that publication for more details about the experiments and data.
 The subset of the data includes a large number of gait cycles for 11 subjects
-subjects walking at three speeds on a treadmill with and without pseudo-random
-longitudinal perturbations, i.e fluctuations in the belt speed. The subject
-detail parameters are given in Table~\ref{tab:subjects}.
+subjects walking at three nominal speeds on a treadmill with and without
+pseudo-random longitudinal perturbations, i.e fluctuations in the belt speed.
+The subject metadata parameters are given in Table~\ref{tab:subjects}.
 %
 \begin{table}
   \cprotect\caption{Information about the 11 study participants. The final
@@ -80,7 +80,7 @@ detail parameters are given in Table~\ref{tab:subjects}.
 
 \subsection*{Data Preprocessing}
 %
-The ``raw'' data provided by \cite{Moore2015} consists of 100~\si{\hertx} time
+The ``raw'' data provided by \cite{Moore2015} consists of 100~\si{\hertz} time
 series of marker and ground reaction loads in addition to event time
 identifiers. We make use of the GaitAnalysisToolKit to process the data with
 these basic steps:
@@ -98,7 +98,7 @@ these basic steps:
   \item Segment each trial into gait cycles based on the right foot's
     heelstrikes.
   \item Interpolate the time series in each gait cycle at a specific number of
-    data points so all all gait cycles have the same number of samples.
+    data points so all gait cycles have the same number of samples.
   \item Throw out any outlier gait cycles that were not properly identified due
     to poor ground reaction force measurements.
 \end{enumerate}
