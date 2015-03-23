@@ -23,7 +23,7 @@ from grf_landmark_settings import settings
 
 def mkdir(directory):
     """Creates a directory if it does not exist, otherwise it does nothing.
-    Returns the absolut path to the directory."""
+    It always returns the absolute path to the directory."""
     if not os.path.exists(directory):
         os.makedirs(directory)
     return os.path.abspath(directory)
@@ -158,7 +158,7 @@ def remove_precomputed_data(tmp_directory, trial_number):
 
 
 def trial_file_paths(trials_dir, trial_number):
-    """Returns the most comman paths to the trials in the gait
+    """Returns the most common paths to the trials in the gait
     identification data set.
 
     Parameters
