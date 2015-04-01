@@ -60,7 +60,7 @@ the foot placement with a simple lienar model derived from kinematic data.
 %
 \subsection*{Experiments}
 %
-We make use of a subset of the the data reported in \cite{Moore2015} and refer
+We make use of a subset of the gait data reported in \cite{Moore2015} and refer
 the reader to that publication for more details about the experiments and data.
 The subset of the data includes a large number of gait cycles for 11 subjects
 subjects walking at three nominal speeds on a treadmill with and without
@@ -82,31 +82,62 @@ The subject metadata parameters are given in Table~\ref{tab:subjects}.
 %
 The ``raw'' data provided by \cite{Moore2015} consists of 100~\si{\hertz} time
 series of marker and ground reaction loads in addition to event time
-identifiers. We make use of the GaitAnalysisToolKit to process the data with
-these basic steps:
+identifiers. We make use of an open source software package,
+GaitAnalysisToolKit, to process the data. The processing follows these steps:
 %
 \begin{enumerate}
   \item Identify missing marker data.
   \item Replace missing marker data with linearly interpolated values.
-  \item Filter all signals with a 2nd order low pass Butterworth filter with a
-    cutoff frequency of 6~\si{\hertz}.
+  \item Filter all signals with a forward/backward 2nd order low pass
+    Butterworth filter with a cutoff frequency of 6~\si{\hertz}.
   \item Section the trials into unperturbed and perturbed sections based on the
     event times.
   \item Compute the planar inverse dynamics for the lower body: right and left
-    ankle, knee, hip joint angles and joint torques.
-  \item Identify the heelstrikes based on the vertical ground reaction force.
-  \item Segment each trial into gait cycles based on the right foot's
+    ankle, knee, hip joint angles, joint angular rates, and joint torques.
+  \item Identify the heelstrike times based on the vertical ground reaction
+    force.
+  \item Segment the time series into gait cycles based on the right foot's
     heelstrikes.
-  \item Interpolate the time series in each gait cycle at a specific number of
+  \item Interpolate the time series in each gait cycle to a specific number of
     data points so all gait cycles have the same number of samples.
   \item Throw out any outlier gait cycles that were not properly identified due
-    to poor ground reaction force measurements.
+    to abnormal ground reaction force measurements.
 \end{enumerate}
 
-\missingfigure{Add figure of single trial joint angles/torques with std across
-  gait cycles.}
-
-\missingfigure{Add figure of the variation in gait cycle stats.}
+After the initial processing above, the data is stored in three dimensional
+arrays M x N x ?, where M is the number of gait cycles, N is the number of time
+instances in the gait cycle, and ? are the number of time series.
+Figure~\ref{fig:angle-torque-comparison} shows the mean and standard deviation
+of across the gait cycles for selected time series for both unperturbed and
+perturbed walking. Furthermore, Figure~\ref{fig:gait-cycle-stats-comparison}
+compares several gait statistics of interest for unperturbed and perturbed
+walking. These two figures are intended to show that there is variation in the
+subject's motion that is a direct result of the longitudinal perturbations.
+%
+\begin{figure}
+  \centering
+  \includegraphics{figures/unperturbed-perturbed-comparison.pdf}
+  \cprotect\caption{Right leg mean and $3\sigma$ (shaded) joint angles and
+    torques from both unperturbed (red) and perturbed (blue) gait cycles
+    from trial 20. We define the nominal configuration, i.e. all joint angles
+    equal to zero, such that the vectors from the shoulder to the hip, the hip
+    to the knee, the knee to the ankle, and the heel to the toe are all aligned.
+    Produced by \verb|src/unperturbed_perturbed_comparison.py|.}
+  \label{fig:angle-torque-comparison}
+\end{figure}
+%
+\begin{figure}
+  \centering
+  \includegraphics{figures/unperturbed-perturbed-boxplot-comparison.pdf}
+  % NOTE : Make sure to update these values (120, 519) if anything in the
+  % script changes.
+  \cprotect\caption{Box plots of the average belt speed, stride frequency,
+    stride length, and stride width which compare 120 unperturbed (U: red) and
+    519 perturbed (P: blue) gait cycles. The median is given with the box
+    bounding the first and third quartiles and the whiskers bound the range of
+    the data. Produced by \verb|src/unperturbed_perturbed_comparison.py|.}
+  \label{fig:gait-cycle-stats-comparison}
+\end{figure}
 
 \subsection*{Controller}
 \label{sec:controller}
@@ -151,13 +182,13 @@ between these.
 \subsection*{Direct Identification}
 %
 We employ a direct identification approach to find the optimal parameters for
-the control structure described in Section~\ref{sec:controller}. Direct
-identifcation has it's drawbacks. It is well known that process noise due to
-unmodeled affects in the identification model will bias the results towards the
-inverse of the plant if the external perturbations are not sufficiently large
-enough~\cite{Ljung1999,Kearney1990,Kooij2005}. Determining if the perturbations
-are of large enough size is difficult because the process noise is generally
-unknown.
+the control structure described in Section~\ref{sec:controller}. We are well
+aware that direct identifcation has its drawbacks. It is well known that
+process noise due to unmodeled affects in the identification model will bias
+the results towards the inverse of the plant if the external perturbations are
+not sufficiently large enough~\cite{Ljung1999,Kearney1990,Kooij2005}.
+Determining if the perturbations are of large enough size is difficult because
+the process noise is generally unknown.
 
 \todo[inline]{I need to explain why we think our perturbations may be large
   enough in magnitude. The problem is that we get similiar identification
@@ -235,13 +266,13 @@ minutes at 100 Hz, which included approximately 500 steps of walking. Ankle
 plantarflexion, knee flexion, and hip flexion angles, rates, and moments were
 computed using 2D inverse dynamics.
 %
-\begin{figure}[hbt]
-  \begin{center}
-    \includegraphics[width=\columnwidth]{fig/gains.pdf}
-    \caption{Gait phase percent scheduled gains for right (blue) and left (red) legs.}
-    \label{fig:gains}
-  \end{center}
-\end{figure}
+%\begin{figure}[hbt]
+  %\begin{center}
+    %\includegraphics[width=\columnwidth]{fig/gains.pdf}
+    %\caption{Gait phase percent scheduled gains for right (blue) and left (red) legs.}
+    %\label{fig:gains}
+  %\end{center}
+%\end{figure}
 
 Here we present an example result from a controller structure which is limited
 to joint torque generation only from error in the sensors from the same joint.
@@ -250,13 +281,13 @@ to the percent gait cycle in each leg. Figure \ref{fig:fit} demonstrates an
 example prediction of the measured ankle plantarflexion torque in the right leg
 by the identified control model.
 %
-\begin{figure}[b]
-  \begin{center}
-    \includegraphics[width=\columnwidth]{fig/fit.pdf}
-    \caption{Predicted torque compared to independent validation data.}
-    \label{fig:fit}
-  \end{center}
-\end{figure}
+%\begin{figure}[b]
+  %\begin{center}
+    %\includegraphics[width=\columnwidth]{fig/fit.pdf}
+    %\caption{Predicted torque compared to independent validation data.}
+    %\label{fig:fit}
+  %\end{center}
+%\end{figure}
 %
 \subsection*{$\mathbf{m}^*$ accounts for most of the variation}
 %
