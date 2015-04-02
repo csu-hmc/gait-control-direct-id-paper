@@ -94,7 +94,7 @@ Nominal Speed: {} m/s, Gender: {}
 
 # Do not include subject 9 in the means because of the odd ankle joint
 # torques.
-similar_trials = utils.build_similar_trials(bad_subjects=[9])
+similar_trials = utils.build_similar_trials_dict(bad_subjects=[9])
 
 mean_gains_per_speed = {}
 
