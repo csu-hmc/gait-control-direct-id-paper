@@ -15,6 +15,9 @@
 % for nice units
 \usepackage{siunitx}
 
+% for less margin space
+\usepackage{fullpage}
+
 % for nice todo notes
 \usepackage{todonotes}
 
@@ -144,51 +147,56 @@ subject's motion that is a direct result of the longitudinal perturbations.
 %
 We assume a black box~\footnote{black box in the system identification sense,
 i.e. there are parameters in the model} control structure for the closed loop
-system, Figure~\ref{fig:controller}. We first assume there is a non-linear
-plant, i.e. the open loop musculoskeletal system, that has a time varying
-state. This plant can be perturbed by an external exogenous input $w(t)$, in
-our case the varying belt speed, and also driven by joint torques
-$\mathbf{m}(t)$. We also assume that there is a nomimal gait phase dependent
+system, Figure~\ref{fig:controller}. We first assume there is an unknown
+non-linear plant, i.e. the open loop musculoskeletal system and treadmill, that
+has an uknown time varying state. This plant can be perturbed by an external
+exogenous input $w(t)$, in our case by varying belt speed, and is also driven
+by joint torques $\mathbf{m}(t)$. An unknown sensor model generates feedback
+signals, $\mathbf{s}(t)$, that are compared to a nomimal gait phase dependent
 reference trajectory $\mathbf{s}_0(\varphi)$ that describes the gait phase
-varying state for cyclic gait when no feedback is necessary. There are then
-nomimal gait phase dependent joint torques $\mathbf{m}_0(\varphi)$ that
-correspond to these nominal trajectories. We then assume that when the actual
-state deviates from the nominal state trajectory that the controller computes
-additive joint torques based on the state tractory error to compensate for
-variation in gait away from the nomimal. The controller is designated as a gait
-phase scheduled gain matrix, $\mathbf{K}(\varphi)$ that relates the error in
-the state trajectories to the additive joint torques. The controller structure
-bounded by the box in Figure~\ref{fig:controlelr} can be described by the
-following algebraic equation. It is important to note that this control
-structure will effectively lump the passive control gains with the active ones
-in addition to any other unmodeled effects. This is desirable for our
-intentions, as we are only concerned with mapping this identified controller to
-that of powered prosthetic device and it is thuse unnessary to distinguish
-between these.
+varying state for cyclic gait when no feedback is necessary. The error in these
+sensors are fed into the controller which generate corrective joint torques
+that are added to the nomimal gait phase dependent joint torques
+$\mathbf{m}_0(\varphi)$ that correspond to the nominal trajectories,
+$\mathbf{s}_0(\varphi)$. We then assume that when the actual state deviates
+from the nominal state trajectory that the controller computes additive joint
+torques based on the state tractory error to compensate for variation in gait
+away from the nomimal.
+
+The controller is designated as a gait phase scheduled gain matrix,
+$\mathbf{K}(\varphi)$ that relates the error in the state trajectories to the
+additive joint torques. The controller structure bounded by the box in
+Figure~\ref{fig:controller} can be described by the following algebraic
+equation.
 %
 \begin{equation}
   \mathbf{m}(t) = \mathbf{m}_0(\varphi) + \mathbf{K}(\varphi) [\mathbf{s}_0(\varphi) - \mathbf{s}(t)]
   \label{eq:controller}
 \end{equation}
-
+%
 \begin{figure}
-  \begin{center}
-    \includegraphics{figures/control-system-detailed.pdf}
-    \caption{The controller block diagram}
-    \label{fig:controller}
-  \end{center}
+  \centering
+  \includegraphics{figures/control-system.pdf}
+  \caption{The controller block diagram}
+  \label{fig:controller}
 \end{figure}
+
+It is important to note that this control structure will effectively lump the
+passive control gains with the active ones in addition to any other unmodeled
+effects. This is desirable for our intentions, as we are only concerned with
+mapping this identified controller to that of powered prosthetic device and it
+is thuse unnessary to distinguish between these.
 
 \subsection*{Direct Identification}
 %
 We employ a direct identification approach to find the optimal parameters for
-the control structure described in Section~\ref{sec:controller}. We are well
-aware that direct identifcation has its drawbacks. It is well known that
-process noise due to unmodeled affects in the identification model will bias
-the results towards the inverse of the plant if the external perturbations are
-not sufficiently large enough~\cite{Ljung1999,Kearney1990,Kooij2005}.
-Determining if the perturbations are of large enough size is difficult because
-the process noise is generally unknown.
+the control structure described in Section~\ref{sec:controller}. We are aware
+that direct identifcation has its drawbacks. It is well known that process
+noise due to unmodeled affects in the identification model will bias the
+results towards the inverse of the plant if the external perturbations are not
+sufficiently large enough~\cite{Ljung1999,Kearney1990,Kooij2005}. Determining
+if the perturbations are of large enough size is difficult because the process
+noise is generally unknown.
 
 \todo[inline]{I need to explain why we think our perturbations may be large
   enough in magnitude. The problem is that we get similiar identification
@@ -205,23 +213,25 @@ a new term $\mathbf{m}^*$.
 %
 \begin{equation}
   \mathbf{m}(t) = \mathbf{m}^*(\varphi) - \mathbf{K}(\varphi) \mathbf{s}(t)
+  \label{eq:linear-form}
 \end{equation}
 %
 where
 %
 \begin{equation}
-  \mathbf{m}^*(t) = \mathbf{m}_0(\varphi) + \mathbf{K}(\varphi) \mathbf{s}_0(\varphi)
+  \mathbf{m}^*(\varphi) = \mathbf{m}_0(\varphi) + \mathbf{K}(\varphi) \mathbf{s}_0(\varphi)
 \end{equation}
 
-Assuming that we can collect noisy measurements and estimate $\mathbf{m}(t)$
+Assuming that we can collect noisy measurements of $\mathbf{m}(t)$
 and $\mathbf{s}(t)$, $\mathbf{m}^*(\varphi)$ and $\mathbf{K}(\varphi)$ are
 identified simply by using linear least squares to regress the data. Given $m$
 gait cycles with $n$ time steps in each gait cycle with $q$ controls and $p$
 sensors there are $nq(p + 1)$ unknowns and $mnq$ equations so we need at least
 $p + 1$ gait cycles to solve for the unknowns.
 
-Details of forming $\mathbf{Ax}=\mathbf{b}$ from Equation~\ref{eq:linear} can
-be found in the supplementary IPython notebook \verb|form_linear_system.ipynb|.
+Details of coercing Equation~\ref{eq:linear-form} into the canonical form,
+$\mathbf{Ax}=\mathbf{b}$ can be found in the supplementary IPython notebook
+\verb|form_linear_system.ipynb|.
 
 We compute the scheduled gains and $\mathbf{m}^*$ for both the unperturbed and
 perturbed gait cycles for each trial. Three quarters of the data from each
@@ -230,33 +240,24 @@ validated against the remaining one quarter of the data. We compute the
 percentatge of variance accounted for by the model with respect to the
 validation data set to gauage how well the model predicts.
 
-\todo[inline]{Add VAF equation}
-
-\todo[inline]{Merge the stuff below with stuff above}
-
-Joint angle, rate, and torque time series were sectioned into steps based on
-the right foot's heel strike. Subsequently, 20 evenly spaced data points from
-each series were interpolated along the gait cycle. We assume a simple
-scheduled proportional derivative controller that generates the joint torques
-given the joint angles and rates that fits the following form.
-%
 \begin{equation}
-  \mathbf{m}(t) = \mathbf{m}^*(\varphi(t)) -
-  \mathbf{K}(\varphi(t))\mathbf{s}(t)
+  \textrm{VAF} = 1 - \frac{||\mathbf{m}_p - \mathbf{m}_m||}
+    {||\mathbf{m}_m - \bar{\mathbf{m}}_m||}
+  \label{eq:vaf}
 \end{equation}
-%
-where $t$ is an instance of time, $\varphi(t)$ is the phase in the right leg
-gait cycle, $\mathbf{m}(t)$ is a vector of joint torques,
-$\mathbf{m}^*(\varphi(t))$ is a vector of the nominal joint torques,
-$\mathbf{K}(\varphi(t))$ is a gain matrix scheduled with respect to gait
-phase which multiplies the vector of joint angles and rates, $\mathbf{s}(t)$.
-This equation is linear in the gains and the reference torques. Given
-sufficient joint angle, rate, and torque measurements, the reference torques
-and the gains can be solved for using linear least squares.
 
 \section*{Results}
 %
-\subsection{Example Result}
+The formulation above allows one to choose a variety of combinations of
+potential sensor, $\mathbf{s}(t)$, and control, $\mathbf{m}(t)$, signals to
+generate a controller.
+
+\begin{description}
+  \item[Joint Isolated Control] The torque generated by a joint is only
+    affected by the sensors that give information about that joint.
+\end{description}
+
+\subsection*{Example Result}
 %
 The example data shown here was collected from a single subject (age: 29, mass:
 63 kg, height: 172 cm) walking on an instrumented treadmill (V-Gait, Motek
@@ -295,6 +296,7 @@ by the identified control model.
 %
 \subsection*{Similar gains are predicted from both unperturbed and perturbed}
 %
+\subsection*{Increasing the number of sensors for each control increases vaf}
 \section*{Discussion}
 %
 We are able to identify a simple linear controller that exhibits larger gains
