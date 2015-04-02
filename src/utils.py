@@ -21,6 +21,17 @@ from dtk.process import coefficient_of_determination
 from gait_landmark_settings import settings
 
 
+class Trial(object):
+    def __init__(self, trial_number):
+        pass
+    def subject_mass(self):
+        pass
+    def identify_controller(self, event, sensors, controls, controller_type):
+        pass
+    def plot_results(self):
+        pass
+
+
 def mkdir(directory):
     """Creates a directory if it does not exist, otherwise it does nothing.
     It always returns the absolute path to the directory."""
@@ -31,7 +42,7 @@ def mkdir(directory):
 
 def config_paths():
     """Returns the full paths to the directories specified in the config.yml
-    file.
+    file in the root directory.
 
     Returns
     -------
@@ -82,8 +93,14 @@ def load_data(event, paths, tmp):
     gait_data : gaitanalysis.gait.GaitData
         The GaitData instance containing the data for the event.
 
+    Notes
+    =====
+    This currently only works for Trial 20 because of the hardcoded
+    settings.
+
     """
 
+    # TODO : This filename is too general.
     file_name = '_'.join([n.lower() for n in event.split(' ')]) + '.h5'
 
     tmp_data_path = os.path.join(tmp, file_name)
@@ -104,6 +121,8 @@ def load_data(event, paths, tmp):
         # strike times, and split the data into gait cycles.
         gait_data = GaitData(perturbed_df)
         marker_set = dflow_data.meta['trial']['marker-set']
+        # TODO : This should use the mass from the force plate measurements
+        # instead of the self reported mass.
         subject_mass = dflow_data.meta['subject']['mass']
         labels = motek.markers_for_2D_inverse_dynamics(marker_set)
         args = list(labels) + [subject_mass, 6.0]
@@ -440,8 +459,7 @@ def measured_subject_mass(raw_data_dir, processed_data_dir):
     tmp_file_name = '_'.join(event.lower().split(' ')) + '.h5'
     tmp_data_path = os.path.join(processed_data_dir, tmp_file_name)
 
-    if not os.path.exists(processed_data_dir):
-        os.makedirs(processed_data_dir)
+    mkdir(processed_data_dir)
 
     subject_data = defaultdict(list)
 
@@ -588,10 +606,28 @@ def merge_unperturbed_gait_cycles(trial_number, params):
     return normal_gait_cycles, d
 
 
+def time_function(function):
+    """Decorator that prints the time a function or method takes to
+    execute."""
+
+    # time.time(): wall time (will time all processes running on the
+    # computer)
+    # time.clock(): the CPU time it takes to execute the current thread so
+    # far (on unix only)
+
+    def timed(*args, **kwargs):
+        start = time.time()
+        results = function(*args, **kwargs)
+        msg = '{} took {:1.2f} s to execute.'
+        print(msg.format(function.__name__, time.time() - start))
+        return results
+
+    return timed
+
+
+@time_function
 def write_event_data_frame_to_disk(trial_number,
                                    event='Longitudinal Perturbation'):
-
-    start = time.clock()
 
     paths = config_paths()
 
@@ -614,9 +650,9 @@ def write_event_data_frame_to_disk(trial_number,
             dflow_data.extract_processed_data(event=event,
                                               index_col='TimeStamp',
                                               isb_coordinates=True)
+        print('Saving cleaned data: {}'.format(event_data_path))
         # TODO : Change the event name in the HDF5 file into one that is
         # natural naming compliant for PyTables.
-        print('Saving cleaned data: {}'.format(event_data_path))
         event_data_frame.to_hdf(event_data_path, event)
     else:
         print('Loading pre-cleaned data: {}'.format(event_data_path))
@@ -625,19 +661,14 @@ def write_event_data_frame_to_disk(trial_number,
 
     meta_data = load_meta_data(file_paths[2])
 
-    print('{:1.2f} s'.format(time.clock() - start))
-
     return event_data_frame, meta_data, event_data_path
 
 
+@time_function
 def write_inverse_dynamics_to_disk(data_frame, meta_data,
                                    event_data_path,
                                    inv_dyn_low_pass_cutoff=6.0):
     """Computes inverse kinematics and dynamics writes to disk."""
-
-    # I use time.time() here because I thnk time.clock() doesn't count the
-    # time spent in Octave on the inverse dynamics code.
-    start = time.time()
 
     walking_data_path = event_data_path.replace('cleaned-data',
                                                 'walking-data')
@@ -667,11 +698,10 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
         f.close()
         walking_data = GaitData(walking_data_path)
 
-    print('{:1.2f} s'.format(time.time() - start))
-
     return walking_data, walking_data_path
 
 
+@time_function
 def section_into_gait_cycles(gait_data, gait_data_path,
                              filter_frequency=10.0,
                              threshold=30.0,
@@ -683,17 +713,13 @@ def section_into_gait_cycles(gait_data, gait_data_path,
 
     def getem():
         print('Finding the ground reaction force landmarks.')
-        start = time.clock()
         gait_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
                                 filter_frequency=filter_frequency,
                                 threshold=threshold)
-        print('{:1.2f} s'.format(time.clock() - start))
 
         print('Spliting the data into gait cycles.')
-        start = time.clock()
         gait_data.split_at('right', num_samples=num_samples,
                            belt_speed_column='RightBeltSpeed')
-        print('{:1.2f} s'.format(time.clock() - start))
 
         gait_data.save(gait_data_path)
 
@@ -703,14 +729,12 @@ def section_into_gait_cycles(gait_data, gait_data_path,
         getem()
     else:
         f.close()
-        start = time.clock()
         gait_data = GaitData(gait_data_path)
         if not hasattr(gait_data, 'gait_cycles') or force is True:
             getem()
         else:
             msg = 'Loading pre-computed gait cycles from {}.'
             print(msg.format(gait_data_path))
-            print(time.clock() - start)
 
     # Remove bad gait cycles based on # samples in each step.
     valid = (gait_data.gait_cycle_stats['Number of Samples'] <
@@ -1046,12 +1070,12 @@ def variance_accounted_for(estimated_panel, validation_panel, controls):
     """Returns a dictionary of R^2 values for each control."""
 
     estimated_walking = pd.concat([df for k, df in
-                                       estimated_panel.iteritems()],
-                                      ignore_index=True)
+                                   estimated_panel.iteritems()],
+                                  ignore_index=True)
 
     actual_walking = pd.concat([df for k, df in
-                                    validation_panel.iteritems()],
-                                   ignore_index=True)
+                                validation_panel.iteritems()],
+                               ignore_index=True)
 
     vafs = {}
 
@@ -1133,7 +1157,7 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains,
     # reaction load measurements, this could theorectically propogate to
     # here through the linear least squares fit.
 
-    data_dir = config_paths()['process_data_dir']
+    data_dir = config_paths()['processed_data_dir']
 
     all_gains = np.zeros((len(trial_numbers),
                           num_gains,
@@ -1280,8 +1304,8 @@ def before_finding_landmarks(trial_number):
 
 def simulated_data_header_map():
     """Returns a dictionary mapping the header names that Ton uses in his
-    simulation output to the head names I use in mind. There currently is no
-    guarantee that the sign conventions are the same, but that shouldn't
+    simulation output to the header names I use in mine. There currently is
+    no guarantee that the sign conventions are the same, but that shouldn't
     intefere with the system id."""
 
     header_map = {
@@ -1502,6 +1526,8 @@ def plot_joint_isolated_gains_better(sensor_labels, control_labels, gains,
 def build_similar_trials_dict(bad_subjects=None):
     """Returns a dictionary of all trials with the same speed."""
 
+    trials_dir = config_paths()['raw_data_dir']
+
     if bad_subjects is None:
         bad_subjects = []
 
@@ -1509,7 +1535,6 @@ def build_similar_trials_dict(bad_subjects=None):
 
     for trial_number, params in settings.items():
 
-        trials_dir = trial_data_dir()
         paths = trial_file_paths(trials_dir, trial_number)
         meta_data = load_meta_data(paths[-1])
         speed = str(meta_data['trial']['nominal-speed'])
