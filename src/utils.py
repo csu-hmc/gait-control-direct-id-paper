@@ -1984,10 +1984,11 @@ class Trial(object):
 
                         axes[i, j].set_title(r"{}: {} $\rightarrow$ Moment".format(col, row))
 
-                        axes[i, j].set_ylabel(unit)
+                        if j == 0:
+                            axes[i, j].set_ylabel(unit)
 
                         if i == 2:
-                            axes[i, j].set_xlabel(r'% of Gait Cycle')
+                            axes[i, j].set_xlabel(r'\% of Gait Cycle')
                             axes[i, j].xaxis.set_major_formatter(_percent_formatter)
                             axes[i, j].set_xlim(xlim)
 
@@ -2001,21 +2002,22 @@ class Trial(object):
                             angle = mean_gait_cycles[angle_sensor]
                         axes[i, j].plot(mean_gait_cycles.index.values.astype(float),
                                         angle, 'k-')
-                        axes[i, j].set_ylabel('rad')
+                        if j == 0:
+                            axes[i, j].set_ylabel('rad')
                         rate_axis = axes[i, j].twinx()
                         rate_axis.plot(mean_gait_cycles.index.values.astype(float),
-                                    mean_gait_cycles[rate_sensor], 'k:')
-                        rate_axis.set_ylabel('rad/s')
+                                       mean_gait_cycles[rate_sensor], 'k:')
+                        if j == 2:
+                            rate_axis.set_ylabel('rad/s')
                         axes[i, j].set_title(r"Mean {} Joint Trajectories".format(col))
                         leg = axes[i, j].legend(('Angle',), loc=2,
-                                                fancybox=True, fontsize=8)
+                                                fancybox=True)
                         leg.get_frame().set_alpha(0.75)
                         leg = rate_axis.legend(('Rate',), loc=1,
-                                            fancybox=True, fontsize=8)
+                                               fancybox=True)
                         leg.get_frame().set_alpha(0.75)
 
-        leg = axes[0, 0].legend(('Right', 'Left'), loc='best', fancybox=True,
-                                fontsize=8)
+        leg = axes[0, 0].legend(('Right', 'Left'), loc='best', fancybox=True)
         leg.get_frame().set_alpha(0.75)
 
         return fig, axes
