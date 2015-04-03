@@ -3,6 +3,7 @@
 # standard library
 import os
 import time
+import warnings
 from collections import OrderedDict, defaultdict
 
 # external libs
@@ -10,6 +11,7 @@ import numpy as np
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
 import pandas as pd
+import tables
 import yaml
 from scipy.optimize import curve_fit
 from gaitanalysis import motek
@@ -20,6 +22,7 @@ from dtk.process import coefficient_of_determination
 
 from gait_landmark_settings import settings
 
+warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 
 def mkdir(directory):
     """Creates a directory if it does not exist, otherwise it does nothing.
@@ -1660,8 +1663,6 @@ class Trial(object):
     def _write_inverse_dynamics_to_disk(self, event):
         """Computes inverse kinematics and dynamics writes to disk."""
 
-        self._write_event_data_frame_to_disk(event)
-
         cutoff_freq = 6.0
 
         gait_data_path = self._file_path('gait_data_dir', event, '.h5')
@@ -1695,15 +1696,13 @@ class Trial(object):
     def _section_into_gait_cycles(self, event, force=False):
         """Sections into gait cycles."""
 
-        self._write_inverse_dynamics_to_disk(event)
-
         gait_data_path = self._file_path('gait_data_dir', event, '.h5')
 
         num_samples = 20
 
         gait_data = self.gait_data_objs[event]
 
-        def compute():
+        def compute(gait_data):
             print('Finding the gait landmarks.')
             gait_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
                                     filter_frequency=self.grf_filter_frequency,
@@ -1718,15 +1717,20 @@ class Trial(object):
         try:
             f = open(gait_data_path)
         except IOError:
-            compute()
+            compute(gait_data)
         else:
             f.close()
             gait_data = GaitData(gait_data_path)
             if not hasattr(gait_data, 'gait_cycles') or force is True:
-                compute()
+                compute(gait_data)
             else:
                 msg = 'Loading pre-computed gait cycles from {}.'
                 print(msg.format(gait_data_path))
+
+        # NOTE : The following line seems to be required to ensure that the
+        # object stored in the dictionary reflects the mutation that happens
+        # in this method. I don't know why this line is necessary though.
+        self.gait_data_objs[event] = gait_data
 
     def _remove_bad_gait_cycles(self, event):
         """Returns the gait cycles with outliers removed based on the
@@ -1752,7 +1756,7 @@ class Trial(object):
 
         return gait_data.gait_cycles.iloc[mid_values.index], mid_values
 
-    def remove_precomputed_data(self, event):
+    def remove_precomputed_data(self):
         """Removes all of the intermediate data files created by this
         class."""
 
@@ -1764,9 +1768,12 @@ class Trial(object):
                     os.remove(path)
                     print('{} was deleted.'.format(path))
 
+    @time_function
     def subject_mass(self, g=9.81):
         """Returns the mean and standard deviation of the subject's mass
         computed from the calibration pose."""
+
+        print("Computing the subject's mass.")
 
         # Some of the trials have anomalies in the data after the
         # calibration pose due to the subjects' movement. The following
@@ -1841,6 +1848,8 @@ class Trial(object):
 
         """
 
+        self._write_event_data_frame_to_disk(event)
+        self._write_inverse_dynamics_to_disk(event)
         self._section_into_gait_cycles(event)
 
         d = 'gains_' + '_'.join(structure.split(' ')) + '_dir'
@@ -2062,8 +2071,12 @@ class Trial(object):
                 axes[i, j].plot(np.hstack(est_x), np.hstack(est_y), # '.',
                                 color='blue')
 
-                axes[i, j].legend(('Measured',
-                                   r'Estimated [{:1.1f}\%]'.format(100.0 * vafs[m])))
+                if plt.rcParams['text.usetex']:
+                    est_lab = r'Estimated [{:1.1f}\%]'.format(100.0 * vafs[m])
+                else:
+                    est_lab = r'Estimated [{:1.1%}]'.format(vafs[m])
+
+                axes[i, j].legend(('Measured', est_lab))
 
                 if j == 0:
                     axes[i, j].set_ylabel(moment.split('.')[0] + ' Torque [Nm]')
