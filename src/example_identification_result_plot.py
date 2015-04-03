@@ -35,7 +35,8 @@ trial_number = '020'
 event = 'Longitudinal Perturbation'
 structure = 'joint isolated'
 
-trial = utils.Trial('020')
+trial = utils.Trial(trial_number)
+trial.remove_precomputed_data(event)
 trial.identify_controller(event, structure)
 
 fig, axes = trial.plot_joint_isolated_gains(event, structure)
