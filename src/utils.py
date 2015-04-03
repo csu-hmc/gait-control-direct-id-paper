@@ -21,17 +21,6 @@ from dtk.process import coefficient_of_determination
 from gait_landmark_settings import settings
 
 
-class Trial(object):
-    def __init__(self, trial_number):
-        pass
-    def subject_mass(self):
-        pass
-    def identify_controller(self, event, sensors, controls, controller_type):
-        pass
-    def plot_results(self):
-        pass
-
-
 def mkdir(directory):
     """Creates a directory if it does not exist, otherwise it does nothing.
     It always returns the absolute path to the directory."""
@@ -1569,3 +1558,464 @@ def plot_mean_gains(similar_trials, trajectories, sensor_labels,
         plt.close(fig)
 
     return mean_gains_per_speed
+
+
+class Trial(object):
+
+    sensors = ['Right.Ankle.PlantarFlexion.Angle',
+               'Right.Ankle.PlantarFlexion.Rate',
+               'Right.Knee.Flexion.Angle',
+               'Right.Knee.Flexion.Rate',
+               'Right.Hip.Flexion.Angle',
+               'Right.Hip.Flexion.Rate',
+               'Left.Ankle.PlantarFlexion.Angle',
+               'Left.Ankle.PlantarFlexion.Rate',
+               'Left.Knee.Flexion.Angle',
+               'Left.Knee.Flexion.Rate',
+               'Left.Hip.Flexion.Angle',
+               'Left.Hip.Flexion.Rate']
+
+    controls = ['Right.Ankle.PlantarFlexion.Moment',
+                'Right.Knee.Flexion.Moment',
+                'Right.Hip.Flexion.Moment',
+                'Left.Ankle.PlantarFlexion.Moment',
+                'Left.Knee.Flexion.Moment',
+                'Left.Hip.Flexion.Moment']
+
+    def __init__(self, trial_number):
+        """
+
+        Parameters
+        ==========
+        trial_number : string
+            Three digit trial number, e.g. '020'.
+
+        """
+
+        self.trial_number = trial_number
+
+        self.data_paths = config_paths()
+        self.trial_file_paths = trial_file_paths(
+            self.data_paths['raw_data_dir'], trial_number)
+        self._setup_processed_data_paths()
+
+        self.meta_data = load_meta_data(self.trial_file_paths[2])
+        self.grf_filter_frequency = settings[trial_number][0]
+        self.grf_threshold = settings[trial_number][1]
+        self.num_samples_lower_bound = settings[trial_number][2]
+        self.num_samples_upper_bound = settings[trial_number][3]
+
+        self.event_data_frames = {}
+        self.gait_data_objs = {}
+        self.control_solvers = defaultdict(dict)
+        self.identification_results = defaultdict(dict)
+
+    def _setup_processed_data_paths(self):
+
+        self.processed_data_sub_dirs = ['cleaned-data', 'gait-data',
+                                        'gains', 'gains/joint-isolated',
+                                        'gains/full']
+
+        for sub_dir in self.processed_data_sub_dirs:
+
+            key = sub_dir.replace('-', '_').replace('/', '_') + '_dir'
+
+            self.data_paths[key] = os.path.join(
+                self.data_paths['processed_data_dir'], sub_dir)
+
+            mkdir(self.data_paths[key])
+
+    def _file_path(self, dir, event, extension):
+
+        file_path = os.path.join(self.data_paths[dir], self.trial_number +
+                                 '-' + '-'.join(event.lower().split(' ')) +
+                                 extension)
+        return file_path
+
+    @time_function
+    def _write_event_data_frame_to_disk(self, event):
+
+        event_data_path = self._file_path('cleaned_data_dir', event, '.h5')
+
+        try:
+            f = open(event_data_path)
+        except IOError:
+            print('Cleaning the data.')
+            dflow_data = motek.DFlowData(*self.trial_file_paths)
+            dflow_data.clean_data(ignore_hbm=True)
+            event_data_frame = dflow_data.extract_processed_data(
+                event=event, index_col='TimeStamp', isb_coordinates=True)
+            print('Saving cleaned data: {}'.format(event_data_path))
+            # TODO : Change the event name in the HDF5 file into one that is
+            # natural naming compliant for PyTables.
+            event_data_frame.to_hdf(event_data_path, event)
+        else:
+            print('Loading pre-cleaned data: {}'.format(event_data_path))
+            f.close()
+            event_data_frame = pd.read_hdf(event_data_path, event)
+
+        self.event_data_frames[event] = event_data_frame
+
+    @time_function
+    def _write_inverse_dynamics_to_disk(self, event):
+        """Computes inverse kinematics and dynamics writes to disk."""
+
+        self._write_event_data_frame_to_disk(event)
+
+        cutoff_freq = 6.0
+
+        gait_data_path = self._file_path('gait_data_dir', event, '.h5')
+
+        try:
+            f = open(gait_data_path)
+        except IOError:
+            print('Computing the inverse dynamics.')
+            marker_set = self.meta_data['trial']['marker-set']
+            inv_dyn_labels = motek.markers_for_2D_inverse_dynamics(
+                marker_set=marker_set)
+
+            gait_data = GaitData(self.event_data_frames[event])
+
+            subject_mass, _ = self.subject_mass()
+            args = list(inv_dyn_labels) + [subject_mass, cutoff_freq]
+
+            gait_data.inverse_dynamics_2d(*args)
+
+            print('Saving inverse dynamics to {}.'.format(gait_data_path))
+            gait_data.save(gait_data_path)
+        else:
+            msg = 'Loading pre-computed inverse dynamics from {}.'
+            print(msg.format(gait_data_path))
+            f.close()
+            gait_data = GaitData(gait_data_path)
+
+        self.gait_data_objs[event] = gait_data
+
+    @time_function
+    def _section_into_gait_cycles(self, event, force=False):
+        """Sections into gait cycles."""
+
+        self._write_inverse_dynamics_to_disk(event)
+
+        gait_data_path = self._file_path('gait_data_dir', event, '.h5')
+
+        num_samples = 20
+
+        gait_data = self.gait_data_objs[event]
+
+        def compute():
+            print('Finding the gait landmarks.')
+            gait_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
+                                    filter_frequency=self.grf_filter_frequency,
+                                    threshold=self.grf_threshold)
+
+            print('Spliting the data into gait cycles.')
+            gait_data.split_at('right', num_samples=num_samples,
+                               belt_speed_column='RightBeltSpeed')
+
+            gait_data.save(gait_data_path)
+
+        try:
+            f = open(gait_data_path)
+        except IOError:
+            compute()
+        else:
+            f.close()
+            gait_data = GaitData(gait_data_path)
+            if not hasattr(gait_data, 'gait_cycles') or force is True:
+                compute()
+            else:
+                msg = 'Loading pre-computed gait cycles from {}.'
+                print(msg.format(gait_data_path))
+
+    def _remove_bad_gait_cycles(self, event):
+        """Returns the gait cycles with outliers removed based on the
+        gait_cycle_stats DataFrame column.
+
+        Returns
+        =======
+        gait_cycles : Panel
+            A reduced Panel of gait cycles.
+        gait_cycle_data : DataFrame
+            A reduced DataFrame of gait cycle data.
+
+        """
+
+        gait_data = self.gait_data_objs[event]
+
+        col = 'Number of Samples'
+
+        valid = gait_data.gait_cycle_stats[col] < self.num_samples_upper_bound
+        lower_values = gait_data.gait_cycle_stats[valid]
+        valid = lower_values[col] > self.num_samples_lower_bound
+        mid_values = lower_values[valid]
+
+        return gait_data.gait_cycles.iloc[mid_values.index], mid_values
+
+    def remove_precomputed_data(self, event):
+        """Removes all of the intermediate data files created by this
+        class."""
+
+        for sub_dir in self.processed_data_sub_dirs:
+            key = sub_dir.replace('-', '_').replace('/', '_') + '_dir'
+            for filename in os.listdir(self.data_paths[key]):
+                if self.trial_number in filename:
+                    path = os.path.join(self.data_paths[key], filename)
+                    os.remove(path)
+                    print('{} was deleted.'.format(path))
+
+    def subject_mass(self, g=9.81):
+        """Returns the mean and standard deviation of the subject's mass
+        computed from the calibration pose."""
+
+        # Some of the trials have anomalies in the data after the
+        # calibration pose due to the subjects' movement. The following
+        # gives best estimates of the sections of the event that are
+        # suitable to use in the subjects' mass computation. The entire time
+        # series during the "Calibration Pose" event is acceptable for
+        # trials not listed.
+        time_sections = {'020': (None, 14.0),
+                         '021': (None, 14.0),
+                         '031': (-14.0, None),
+                         '047': (None, 12.0),
+                         '048': (None, 7.0),
+                         '055': (-12.0, None),
+                         '056': (-3.0, None),  # also the first 2 seconds are good
+                         '057': (-8.0, None),
+                         '063': (None, 6.0),  # also the last 6 seconds are good
+                         '069': (None, 14.0),
+                         '078': (None, 15.0)}
+
+        event = 'Calibration Pose'
+
+        self._write_event_data_frame_to_disk(event)
+
+        df = self.event_data_frames[event]
+
+        # This is the time varying mass in kg during the calibration pose.
+        df['Mass'] = (df['FP1.ForY'] + df['FP1.ForY']) / g
+
+        # This sets the slice indices so that only the portion of the time
+        # series with valid data is used to compute the mass.
+        if self.trial_number in time_sections:
+            start = time_sections[self.trial_number][0]
+            stop = time_sections[self.trial_number][1]
+            if start is None:
+                stop = df.index[0] + stop
+            elif stop is None:
+                start = df.index[-1] + start
+        else:
+            start = None
+            stop = None
+
+        valid = df['Mass'].loc[start:stop]
+
+        return valid.mean(), valid.std()
+
+    def _gain_inclusion_matrix(self, structure):
+
+        if structure == 'joint isolated':
+
+            # Limit to angles and rates from one joint can only affect the
+            # moment at that joint.
+            gain_inclusion_matrix = np.zeros((len(self.controls),
+                                              len(self.sensors))).astype(bool)
+            for i, row in enumerate(gain_inclusion_matrix):
+                row[2 * i:2 * i + 2] = True
+
+        elif structure == 'full':
+
+            gain_inclusion_matrix = None
+
+        return gain_inclusion_matrix
+
+    @time_function
+    def identify_controller(self, event, structure):
+        """
+
+        Parameters
+        ==========
+        event :
+        structure : string
+            {'full', 'joint isolated'}
+
+        """
+
+        self._section_into_gait_cycles(event)
+
+        d = 'gains_' + '_'.join(structure.split(' ')) + '_dir'
+        gain_data_h5_path = self._file_path(d, event, '.h5')
+        gain_data_npz_path = self._file_path(d, event, '.npz')
+
+        print('Identifying the controller.')
+
+        gait_cycles, _ = self._remove_bad_gait_cycles(event)
+
+        # Use the first 3/4 of the gait cycles to compute the gains and
+        # validate on the last 1/4. Most runs seem to be about 500 gait
+        # cycles.
+        num_gait_cycles = gait_cycles.shape[0]
+        solver = SimpleControlSolver(
+            gait_cycles.iloc[:num_gait_cycles * 3 / 4],
+            self.sensors,
+            self.controls,
+            validation_data=gait_cycles.iloc[num_gait_cycles * 3 / 4:])
+
+        gain_inclusion_matrix = self._gain_inclusion_matrix(structure)
+
+        try:
+            f = open(gain_data_h5_path)
+            f.close()
+            f = open(gain_data_npz_path)
+        except IOError:
+
+            if structure == 'joint isolated':
+                ignore_cov = False
+            elif structure == 'full':
+                ignore_cov = True
+
+            result = solver.solve(gain_inclusion_matrix=gain_inclusion_matrix,
+                                  ignore_cov=ignore_cov)
+            print('Saving gains to:\n    {}\n    {}'.format(gain_data_npz_path,
+                                                            gain_data_h5_path))
+            # first items are numpy arrays
+            np.savez(gain_data_npz_path, *result[:-1])
+            # the last item is a panel
+            result[-1].to_hdf(gain_data_h5_path, event)
+        else:
+            msg = 'Loading pre-computed gains from:\n    {}\n    {}'
+            print(msg.format(gain_data_npz_path, gain_data_h5_path))
+            f.close()
+            with np.load(gain_data_npz_path) as npz:
+                result = [npz['arr_0'],
+                          npz['arr_1'],
+                          npz['arr_2'],
+                          npz['arr_3'],
+                          npz['arr_4']]
+            result.append(pd.read_hdf(gain_data_h5_path, event))
+            solver.gain_inclusion_matrix = gain_inclusion_matrix
+
+        self.control_solvers[event][structure] = solver
+        self.identification_results[event][structure] = result
+
+    @time_function
+    def plot_joint_isolated_gains(self, event, structure, axes=None,
+                                  show_gain_std=True, linestyle='-'):
+        """Plots a 3 x 3 subplot where the columns corresond to a joint
+        (ankle, knee, hip). The top show shows the proportional gain plots
+        and the bottom row shows the derivative gain plots. The middle row
+        plots the mean angle and angular rate on a plotyy chart.
+
+        """
+
+        gains = self.identification_results[event][structure][0]
+        gains_variance = self.identification_results[event][structure][3]
+        gait_cycles, _ = self._remove_bad_gait_cycles(event)
+        mean_gait_cycles = gait_cycles.mean(axis='items')
+
+        print('Generating gain plot.')
+
+        if axes is None:
+            fig, axes = plt.subplots(3, 3, sharex=True)
+        else:
+            fig = axes[0, 0].figure
+
+        for i, (row, unit) in enumerate(
+            zip(['Angle', 'Trajectory', 'Rate'],
+                ['Nm/rad', None, r'Nm $\cdot$ s/rad'])):
+
+            for j, (col, sign) in enumerate(
+                zip(['Ankle', 'Knee', 'Hip'],
+                    ['PlantarFlexion', 'Flexion', 'Flexion'])):
+
+                for side, marker, color in zip(['Right', 'Left'],
+                                               ['o', 'o'],
+                                               ['Blue', 'Red']):
+
+                    if row != 'Trajectory':
+                        row_label = '.'.join([side, col, sign, row])
+                        col_label = '.'.join([side, col, sign + '.Moment'])
+
+                        gain_row_idx = self.sensors.index(row_label)
+                        gain_col_idx = self.controls.index(col_label)
+
+                        gains_per = gains[:, gain_col_idx, gain_row_idx]
+                        sigma = np.sqrt(gains_variance[:, gain_col_idx,
+                                                       gain_row_idx])
+
+                        percent_of_gait_cycle = \
+                            np.linspace(0.0, 1.0 - 1.0 / gains.shape[0],
+                                        num=gains.shape[0])
+
+                        xlim = (0.0, 1.0)
+
+                        if side == 'Left':
+                            # Shift that diggidty-dogg signal 50%
+                            num_samples = len(percent_of_gait_cycle)
+
+                            if num_samples % 2 == 0:  # even
+                                first = percent_of_gait_cycle[:num_samples / 2] + 0.5
+                                second = percent_of_gait_cycle[num_samples / 2:] - 0.5
+                            else:  # odd
+                                first = percent_of_gait_cycle[percent_of_gait_cycle < 0.5] + 0.5
+                                second = percent_of_gait_cycle[percent_of_gait_cycle > 0.5] - 0.5
+
+                            percent_of_gait_cycle = np.hstack((first, second))
+
+                            # sort and sort gains/sigma same way
+                            sort_idx = np.argsort(percent_of_gait_cycle)
+                            percent_of_gait_cycle = percent_of_gait_cycle[sort_idx]
+                            gains_per = gains_per[sort_idx]
+                            sigma = sigma[sort_idx]
+
+                        if show_gain_std:
+                            axes[i, j].fill_between(percent_of_gait_cycle,
+                                                    gains_per - sigma,
+                                                    gains_per + sigma,
+                                                    alpha=0.5,
+                                                    color=color)
+
+                        axes[i, j].plot(percent_of_gait_cycle, gains_per,
+                                        marker='o',
+                                        ms=2,
+                                        color=color,
+                                        label=side,
+                                        linestyle=linestyle)
+
+                        axes[i, j].set_title(r"{}: {} $\rightarrow$ Moment".format(col, row))
+
+                        axes[i, j].set_ylabel(unit)
+
+                        if i == 2:
+                            axes[i, j].set_xlabel(r'% of Gait Cycle')
+                            axes[i, j].xaxis.set_major_formatter(_percent_formatter)
+                            axes[i, j].set_xlim(xlim)
+
+                    elif row == 'Trajectory' and side == 'Right':
+                        # TODO : Should I plot mean of right and shifted left?
+                        angle_sensor = '.'.join([side, col, sign, 'Angle'])
+                        rate_sensor = '.'.join([side, col, sign, 'Rate'])
+                        if col == 'Ankle':
+                            angle = mean_gait_cycles[angle_sensor] + np.pi / 2.0
+                        else:
+                            angle = mean_gait_cycles[angle_sensor]
+                        axes[i, j].plot(mean_gait_cycles.index.values.astype(float),
+                                        angle, 'k-')
+                        axes[i, j].set_ylabel('rad')
+                        rate_axis = axes[i, j].twinx()
+                        rate_axis.plot(mean_gait_cycles.index.values.astype(float),
+                                    mean_gait_cycles[rate_sensor], 'k:')
+                        rate_axis.set_ylabel('rad/s')
+                        axes[i, j].set_title(r"Mean {} Joint Trajectories".format(col))
+                        leg = axes[i, j].legend(('Angle',), loc=2,
+                                                fancybox=True, fontsize=8)
+                        leg.get_frame().set_alpha(0.75)
+                        leg = rate_axis.legend(('Rate',), loc=1,
+                                            fancybox=True, fontsize=8)
+                        leg.get_frame().set_alpha(0.75)
+
+        leg = axes[0, 0].legend(('Right', 'Left'), loc='best', fancybox=True,
+                                fontsize=8)
+        leg.get_frame().set_alpha(0.75)
+
+        return fig, axes
