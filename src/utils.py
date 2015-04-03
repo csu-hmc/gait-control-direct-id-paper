@@ -2021,3 +2021,69 @@ class Trial(object):
         leg.get_frame().set_alpha(0.75)
 
         return fig, axes
+
+    @time_function
+    def plot_validation(self, event, structure):
+
+        estimated_controls = self.identification_results[event][structure][-1]
+        continuous = self.gait_data_objs[event].data
+        vafs = variance_accounted_for(estimated_controls,
+                                      self.control_solvers[event][structure].validation_data,
+                                      self.controls)
+
+        print('Generating validation plot.')
+
+        # get the first and last time of the estimated controls (just 10 gait
+        # cycles)
+        beg_first_step = estimated_controls.iloc[0]['Original Time'].iloc[0]
+        end_last_step = estimated_controls.iloc[9]['Original Time'].iloc[-1]
+        period = continuous[beg_first_step:end_last_step]
+
+        # make plot for right and left legs
+        fig, axes = plt.subplots(3, 2, sharex=True)
+
+        moments = ['Ankle.PlantarFlexion.Moment',
+                   'Knee.Flexion.Moment',
+                   'Hip.Flexion.Moment']
+        for j, side in enumerate(['Right', 'Left']):
+            for i, moment in enumerate(moments):
+                m = '.'.join([side, moment])
+                axes[i, j].plot(period.index.values.astype(float),
+                                period[m].values, '.', markersize=2,
+                                color='black')
+                axes[i, j].get_xaxis().get_major_formatter().set_useOffset(False)
+
+                est_x = []
+                est_y = []
+                for null, step in estimated_controls.iteritems():
+                    est_x.append(step['Original Time'].values)
+                    est_y.append(step[m].values)
+
+                axes[i, j].plot(np.hstack(est_x), np.hstack(est_y), # '.',
+                                color='blue')
+
+                axes[i, j].legend(('Measured',
+                                   r'Estimated [{:1.1f}\%]'.format(100.0 * vafs[m])))
+
+                if j == 0:
+                    axes[i, j].set_ylabel(moment.split('.')[0] + ' Torque [Nm]')
+
+                if j == 1:
+                    axes[i, j].get_yaxis().set_ticks([])
+
+        for i, m in enumerate(moments):
+            adjacent = (period['Right.' + m].values, period['Left.' + m].values)
+            axes[i, 0].set_ylim((np.min(np.hstack(adjacent)),
+                                np.max(np.hstack(adjacent))))
+            axes[i, 1].set_ylim((np.min(np.hstack(adjacent)),
+                                np.max(np.hstack(adjacent))))
+
+        axes[0, 0].set_xlim((beg_first_step, end_last_step))
+
+        axes[0, 0].set_title('Right Leg')
+        axes[0, 1].set_title('Left Leg')
+
+        axes[-1, 0].set_xlabel('Time [s]')
+        axes[-1, 1].set_xlabel('Time [s]')
+
+        return fig, axes

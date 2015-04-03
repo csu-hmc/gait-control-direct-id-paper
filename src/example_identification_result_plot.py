@@ -37,11 +37,12 @@ structure = 'joint isolated'
 
 trial = utils.Trial('020')
 trial.identify_controller(event, structure)
+
 fig, axes = trial.plot_joint_isolated_gains(event, structure)
-
 plt.tight_layout()
-
 filename = 'example-identified-joint-isolated-gains.pdf'
 fig.savefig(os.path.join(paths['figures_dir'], filename))
 
-# TODO : Plot fit.
+fig, axes = trial.plot_validation(event, structure)
+filename = 'example-identified-joint-isolated-fit.pdf'
+fig.savefig(os.path.join(paths['figures_dir'], filename))
