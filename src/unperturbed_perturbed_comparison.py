@@ -135,7 +135,6 @@ axes[-1, 1].set_xlabel('Percent Right Gait Cycle')
 axes[0, 0].legend(loc='upper left', ncol=2, bbox_to_anchor=(0.30, 1.65))
 
 fig_dir = utils.mkdir(PATHS['figures_dir'])
-
 file_path = os.path.join(fig_dir, 'unperturbed-perturbed-comparison.pdf')
 fig.savefig(file_path)
 print('Time series plot at: {}'.format(file_path))
