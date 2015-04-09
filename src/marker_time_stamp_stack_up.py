@@ -17,6 +17,17 @@ PATHS = utils.config_paths()
 time_dir = utils.mkdir(os.path.join(PATHS['figures_dir'],
                                     'timestamp-issues'))
 
+params = {
+          'axes.labelsize': 8,
+          'axes.titlesize': 10,
+          'font.size': 10,
+          'legend.fontsize': 8,
+          'xtick.labelsize': 8,
+          'ytick.labelsize': 8,
+          }
+
+plt.rcParams.update(params)
+
 trial_numbers = sorted(settings.keys())
 
 for trial_number in trial_numbers:
