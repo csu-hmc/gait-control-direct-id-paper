@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 
-"""This script preprocessed the data, creates some plots that show how well
-the preprocessing went, and then identifies the joint isolated controller
-and plots the results."""
+"""This script identifies the controller and plots the results."""
 
 # builtin
 import os
+import argparse
 
 # external
 import matplotlib.pyplot as plt
-from gaitanalysis.gait import plot_gait_cycles
 
 # local
 import utils
@@ -17,121 +15,74 @@ from gait_landmark_settings import settings
 
 PATHS = utils.config_paths()
 
-for trial_number, params in settings.items():
-    msg = 'Identifying controller for trial #{}'.format(trial_number)
-    print(msg)
-    print('=' * len(msg))
 
-    # Preprocessing
-    event_data_frame, meta_data, event_data_path = \
-        utils.write_event_data_frame_to_disk(trial_number)
+def main(event, structure):
 
-    gait_data, gait_data_path = \
-        utils.write_inverse_dynamics_to_disk(event_data_frame, meta_data,
-                                             event_data_path)
+    trial_numbers = sorted(settings.keys())
 
-    steps, gait_data = \
-        utils.section_into_gait_cycles(gait_data, gait_data_path,
-                                       filter_frequency=params[0],
-                                       threshold=params[1],
-                                       num_samples_lower_bound=params[2],
-                                       num_samples_upper_bound=params[3])
+    plot_dir = utils.mkdir(os.path.join(PATHS['figures_dir'],
+                                        'identification-results',
+                                        '-'.join(event.lower().split(' ')),
+                                        '-'.join(structure.split(' '))))
 
-    # This plot shows all gait cycles (bad ones haven't been dropped).
-    axes = gait_data.gait_cycle_stats.hist()
-    fig = plt.gcf()
-    hist_dir = utils.mkdir(os.path.join(PATHS['figures_dir'],
-                                        'gait-cycle-histograms'))
-    fig.savefig(os.path.join(hist_dir, trial_number + '.png'), dpi=300)
-    plt.close(fig)
+    for trial_number in trial_numbers:
 
-    # This will plot only the good steps.
-    axes = plot_gait_cycles(steps, 'FP2.ForY')
-    fig = plt.gcf()
-    grf_dir = utils.mkdir(os.path.join(PATHS['figures_dir'],
-                                       'vertical-grfs'))
-    fig.savefig(os.path.join(grf_dir, trial_number + '.png'), dpi=300)
-    plt.close(fig)
+        msg = 'Identifying {} controller from {} for trial #{}'
+        msg = msg.format(structure, event, trial_number)
 
-    # Identification
-    sensor_labels, control_labels, result, solver = \
-        utils.find_joint_isolated_controller(steps, event_data_path)
+        print('=' * len(msg))
+        print(msg)
+        print('=' * len(msg))
 
-    vafs = utils.variance_accounted_for(result[-1], solver.validation_data,
-                                        control_labels)
+        trial = utils.Trial(trial_number)
+        trial.identify_controller(event, structure)
 
-    fig, axes = utils.plot_joint_isolated_gains_better(sensor_labels,
-                                                       control_labels,
-                                                       result[0], result[3],
-                                                       steps.mean(axis='items'))
+        fig, axes = trial.plot_joint_isolated_gains(event, structure)
 
-    id_num_steps = solver.identification_data.shape[0]
+        solver = trial.control_solvers[event][structure]
+        id_num_steps = solver.identification_data.shape[0]
 
-    joint_dir = utils.mkdir(os.path.join(PATHS['figures_dir'],
-                                         'joint-isolated'))
-
-    title = """\
-Scheduled Gains Identified from {} Gait Cycles in Trial {}
+        title = """\
+{} Scheduled Gains Identified from {} Gait Cycles in Trial {}
 Nominal Speed: {} m/s, Gender: {}
 """
 
-    fig.suptitle(title.format(id_num_steps, trial_number,
-                              meta_data['trial']['nominal-speed'],
-                              meta_data['subject']['gender']))
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.85)
+        fig.suptitle(title.format(structure.capitalize(), id_num_steps,
+                                  trial_number,
+                                  trial.meta_data['trial']['nominal-speed'],
+                                  trial.meta_data['subject']['gender']))
 
-    fig.set_size_inches((14.0, 14.0))
-    fig.savefig(os.path.join(joint_dir, 'gains-' + trial_number + '.png'),
-                dpi=300)
-    plt.close(fig)
+        fig.set_size_inches((14.0, 14.0))
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.85)
 
-    fig, axes = utils.plot_validation(result[-1], gait_data.data, vafs)
+        fig_path = os.path.join(plot_dir, 'gains-' + trial_number + '.png')
+        fig.savefig(fig_path, dpi=300)
+        print('Gain plot saved to {}'.format(fig_path))
+        plt.close(fig)
 
-    fig.savefig(os.path.join(joint_dir, 'validation-' + trial_number +
-                             '.png'), dpi=300)
-    plt.close(fig)
+        fig, axes = trial.plot_validation(event, structure)
+        fig_path = os.path.join(plot_dir, 'validation-' + trial_number + '.png')
+        fig.savefig(fig_path, dpi=300)
+        print('Validation plot saved to {}'.format(fig_path))
+        plt.close(fig)
 
-# Do not include subject 9 in the means because of the odd ankle joint
-# torques.
-similar_trials = utils.build_similar_trials_dict(bad_subjects=[9])
+if __name__ == "__main__":
 
-mean_gains_per_speed = {}
+    desc = "Identify Controller"
 
-for speed, trial_numbers in similar_trials.items():
-    mean_gains, var_gains = utils.mean_joint_isolated_gains(
-        trial_numbers, sensor_labels, control_labels, 20,
-        'longitudinal-perturbation')
-    mean_gains_per_speed[speed] = mean_gains
+    parser = argparse.ArgumentParser(description=desc)
 
-    # TODO : This should plot the mean angles and rates from all the trials?
-    # Right now it just uses the last trial.
-    fig, axes = utils.plot_joint_isolated_gains_better(
-        sensor_labels, control_labels, mean_gains, var_gains,
-        steps.mean(axis='items'))
+    msg = ("A valid event name in the data, likely: "
+           "'Longitudinal Perturbation', 'First Normal Walking', "
+           "or 'Second Normal Walking'.")
+    parser.add_argument('-e', '--event', type=str, help=msg,
+                        default='Longitudinal Perturbation')
 
-    fig.set_size_inches((14.0, 14.0))
-    fig.savefig(os.path.join(joint_dir, 'mean-gains-' + speed + '.png'),
-                dpi=300)
-    plt.close(fig)
+    msg = ("The desired controller structure: 'join isolated' or 'full'.")
+    parser.add_argument('-s', '--structure', type=str, help=msg,
+                        default='joint isolated')
 
-fig, axes = plt.subplots(3, 2, sharex=True)
-linestyles = ['-', '--', ':']
-speeds = ['0.8', '1.2', '1.6']
+    args = parser.parse_args()
 
-for speed, linestyle in zip(speeds, linestyles):
-    fig, axes = utils.plot_joint_isolated_gains(sensor_labels,
-                                                control_labels,
-                                                mean_gains_per_speed[speed],
-                                                var_gains, axes=axes,
-                                                show_std=False,
-                                                linestyle=linestyle)
-axes[0, 0].legend().set_visible(False)
-right_labels = ['Right ' + speed + ' [m/s]' for speed in speeds]
-left_labels = ['Left ' + speed + ' [m/s]' for speed in speeds]
-leg = axes[1, 0].legend(list(sum(zip(right_labels, left_labels), ())),
-                        loc='best', fancybox=True, fontsize=8)
-leg.get_frame().set_alpha(0.75)
-
-fig.savefig(os.path.join(joint_dir, 'mean-gains-vs-speed.png'), dpi=300)
-plt.close(fig)
+    main(args.event, args.structure)
