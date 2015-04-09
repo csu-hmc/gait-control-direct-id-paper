@@ -1180,7 +1180,20 @@ def mean_joint_isolated_gains(trial_numbers, sensors, controls, num_gains,
 
 
 def mean_gains(trial_numbers, sensors, controls, num_gains, event,
-               controller):
+               structure):
+    """
+    Parameters
+    ==========
+    trial_numbers : list of strings
+        The trial numbers that the means should be computed for.
+    sensors : list of strings
+    controls : list of strings
+    num_gains : int
+        Number of gains computed.
+    event : string
+    structure : string
+
+    """
 
     # TODO : If I could provide some uncertainty in the marker and ground
     # reaction load measurements, this could theorectically propogate to
@@ -1199,9 +1212,9 @@ def mean_gains(trial_numbers, sensors, controls, num_gains, event,
                         len(sensors)))
 
     for i, trial_number in enumerate(trial_numbers):
-        template = '{}-gain-data-{}-{}.npz'
-        file_name = template.format(controller, trial_number, event)
-        gain_data_npz_path = os.path.join(data_dir, file_name)
+        file_name_template = '{}-{}.npz'
+        file_name = file_name_template.format(trial_number, event)
+        gain_data_npz_path = os.path.join(data_dir, 'gains', structure, file_name)
         with np.load(gain_data_npz_path) as npz:
             # n, q, p
             all_gains[i] = npz['arr_0']
@@ -1586,6 +1599,8 @@ class Trial(object):
                 'Left.Knee.Flexion.Moment',
                 'Left.Hip.Flexion.Moment']
 
+    num_cycle_samples= 20
+
     def __init__(self, trial_number):
         """
 
@@ -1699,8 +1714,6 @@ class Trial(object):
 
         gait_data_path = self._file_path('gait_data_dir', event, '.h5')
 
-        num_samples = 20
-
         gait_data = self.gait_data_objs[event]
 
         def compute(gait_data):
@@ -1710,7 +1723,7 @@ class Trial(object):
                                     threshold=self.grf_threshold)
 
             print('Spliting the data into gait cycles.')
-            gait_data.split_at('right', num_samples=num_samples,
+            gait_data.split_at('right', num_samples=self.num_cycle_samples,
                                belt_speed_column='RightBeltSpeed')
 
             gait_data.save(gait_data_path)
