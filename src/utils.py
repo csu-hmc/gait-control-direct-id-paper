@@ -24,6 +24,7 @@ from gait_landmark_settings import settings
 
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 
+
 def mkdir(directory):
     """Creates a directory if it does not exist, otherwise it does nothing.
     It always returns the absolute path to the directory."""
@@ -106,7 +107,7 @@ def load_data(event, paths, tmp):
         dflow_data.clean_data(ignore_hbm=True)
         perturbed_df = \
             dflow_data.extract_processed_data(event=event,
-                                              index_col='TimeStamp',
+                                              index_col='Cortex Time',
                                               isb_coordinates=True)
 
         # Compute the lower limb 2D inverse dynamics, identify right heel
@@ -475,7 +476,7 @@ def measured_subject_mass(raw_data_dir, processed_data_dir):
                 print('Loading raw data files and cleaning...')
                 dflow_data.clean_data(ignore_hbm=True)
                 df = dflow_data.extract_processed_data(event=event,
-                                                       index_col='TimeStamp',
+                                                       index_col='Cortex Time',
                                                        isb_coordinates=True)
                 df.to_hdf(tmp_data_path, 'T' + trial_number)
             else:
@@ -640,7 +641,7 @@ def write_event_data_frame_to_disk(trial_number,
         dflow_data.clean_data(ignore_hbm=True)
         event_data_frame = \
             dflow_data.extract_processed_data(event=event,
-                                              index_col='TimeStamp',
+                                              index_col='Cortex Time',
                                               isb_coordinates=True)
         print('Saving cleaned data: {}'.format(event_data_path))
         # TODO : Change the event name in the HDF5 file into one that is
@@ -1647,7 +1648,7 @@ class Trial(object):
             dflow_data = motek.DFlowData(*self.trial_file_paths)
             dflow_data.clean_data(ignore_hbm=True)
             event_data_frame = dflow_data.extract_processed_data(
-                event=event, index_col='TimeStamp', isb_coordinates=True)
+                event=event, index_col='Cortex Time', isb_coordinates=True)
             print('Saving cleaned data: {}'.format(event_data_path))
             # TODO : Change the event name in the HDF5 file into one that is
             # natural naming compliant for PyTables.
