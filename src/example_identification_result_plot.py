@@ -31,7 +31,7 @@ params = {'backend': 'ps',
 
 plt.rcParams.update(params)
 
-trial_number = '020'
+trial_number = '019'
 event = 'Longitudinal Perturbation'
 structure = 'joint isolated'
 
