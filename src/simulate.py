@@ -18,7 +18,7 @@ from dtk import process
 
 # local
 import utils
-import controllers
+import simulation
 from grf_landmark_settings import settings
 
 # debugging
@@ -68,8 +68,8 @@ percent_gait_cycle = gait_cycles.iloc[0].index.values.astype(float)  # n
 m_stars = result[1]  # n x q
 gain_matrices = result[0]  # n x q x p
 
-state_indices = utils.state_indices_for_controller()
-control_indices = utils.control_indices_for_specified()
+state_indices = simulation.state_indices_for_controller()
+control_indices = simulation.control_indices_for_specified()
 
 # TODO : This is a hack to get the right state signs when computing the
 # controller.
@@ -110,7 +110,7 @@ def controller(x, t):
 
 # This loads an open loop control solution that way precomputed with Ton's
 # Matlab code.
-open_loop_states, open_loop_specified, open_loop_duration = utils.load_open_loop_trajectories()
+open_loop_states, open_loop_specified, open_loop_duration = simulation.load_open_loop_trajectories()
 open_loop_percent_gait_cycle = np.linspace(0.0, 100.0, num=open_loop_states.shape[1])
 
 def open_loop_controller(x, t):
