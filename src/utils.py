@@ -575,6 +575,7 @@ def merge_unperturbed_gait_cycles(trial_number, params):
         second by some amount to avoid odd data.
 
     """
+
     d = {'First Normal Walking': {},
          'Second Normal Walking': {}}
 
@@ -1599,7 +1600,7 @@ class Trial(object):
                 'Left.Knee.Flexion.Moment',
                 'Left.Hip.Flexion.Moment']
 
-    num_cycle_samples= 20
+    num_cycle_samples = 20
 
     def __init__(self, trial_number):
         """
@@ -1746,6 +1747,18 @@ class Trial(object):
         # in this method. I don't know why this line is necessary though.
         self.gait_data_objs[event] = gait_data
 
+    def prep_data(self, event):
+
+        if event == 'Normal Walking':
+            events = ['First Normal Walking', 'Second Normal Walking']
+        else:
+            events = [event]
+
+        for event in events:
+            self._write_event_data_frame_to_disk(event)
+            self._write_inverse_dynamics_to_disk(event)
+            self._section_into_gait_cycles(event)
+
     def _remove_bad_gait_cycles(self, event):
         """Returns the gait cycles with outliers removed based on the
         gait_cycle_stats DataFrame column.
@@ -1769,6 +1782,19 @@ class Trial(object):
         mid_values = lower_values[valid]
 
         return gait_data.gait_cycles.iloc[mid_values.index], mid_values
+
+    def merge_normal_walking(self):
+
+        first_event = 'First Normal Walking'
+        second_event = 'Second Normal Walking'
+
+        self.prep_data(first_event)
+        self.prep_data(second_event)
+
+        first_cycles, first_stats = self._remove_bad_gait_cycles(first_event)
+        second_cycles, second_stats = self._remove_bad_gait_cycles(second_event)
+
+        return pd.concat((first_cycles, second_cycles), ignore_index=True)
 
     def remove_precomputed_data(self):
         """Removes all of the intermediate data files created by this
@@ -1856,33 +1882,39 @@ class Trial(object):
 
         Parameters
         ==========
-        event :
+        event : string
+            Valid event name for the trial or 'Normal Walking' for merging
+            the event names.
         structure : string
             {'full', 'joint isolated'}
 
         """
 
-        self._write_event_data_frame_to_disk(event)
-        self._write_inverse_dynamics_to_disk(event)
-        self._section_into_gait_cycles(event)
+        self.prep_data(event)
+
+        if event == 'Normal Walking':
+            id_cycles, _ = self._remove_bad_gait_cycles('First Normal Walking')
+            val_cycles, _ = self._remove_bad_gait_cycles('Second Normal Walking')
+        else:
+            gait_cycles, _ = self._remove_bad_gait_cycles(event)
+            num_gait_cycles = gait_cycles.shape[0]
+            id_cycles = gait_cycles.iloc[:num_gait_cycles * 3 / 4]
+            val_cycles = gait_cycles.iloc[num_gait_cycles * 3 / 4:]
 
         d = 'gains_' + '_'.join(structure.split(' ')) + '_dir'
         gain_data_h5_path = self._file_path(d, event, '.h5')
         gain_data_npz_path = self._file_path(d, event, '.npz')
 
-        print('Identifying the controller.')
-
-        gait_cycles, _ = self._remove_bad_gait_cycles(event)
+        #msg = 'Identifying the {} controller for the {} data.'
+        #print('=' * len(msg))
+        #print(msg.format(structure, event))
+        #print('=' * len(msg))
 
         # Use the first 3/4 of the gait cycles to compute the gains and
         # validate on the last 1/4. Most runs seem to be about 500 gait
         # cycles.
-        num_gait_cycles = gait_cycles.shape[0]
-        solver = SimpleControlSolver(
-            gait_cycles.iloc[:num_gait_cycles * 3 / 4],
-            self.sensors,
-            self.controls,
-            validation_data=gait_cycles.iloc[num_gait_cycles * 3 / 4:])
+        solver = SimpleControlSolver(id_cycles, self.sensors, self.controls,
+                                     validation_data=val_cycles)
 
         gain_inclusion_matrix = self._gain_inclusion_matrix(structure)
 
@@ -1933,7 +1965,12 @@ class Trial(object):
 
         gains = self.identification_results[event][structure][0]
         gains_variance = self.identification_results[event][structure][3]
-        gait_cycles, _ = self._remove_bad_gait_cycles(event)
+
+        if event == 'Normal Walking':
+            gait_cycles = self.merge_normal_walking()
+        else:
+            gait_cycles, _ = self._remove_bad_gait_cycles(event)
+
         mean_gait_cycles = gait_cycles.mean(axis='items')
 
         print('Generating gain plot.')
@@ -2048,8 +2085,12 @@ class Trial(object):
     @time_function
     def plot_validation(self, event, structure):
 
+        if event == "Normal Walking":
+            continuous = self.gait_data_objs['Second Normal Walking'].data
+        else:
+            continuous = self.gait_data_objs[event].data
+
         estimated_controls = self.identification_results[event][structure][-1]
-        continuous = self.gait_data_objs[event].data
         vafs = variance_accounted_for(estimated_controls,
                                       self.control_solvers[event][structure].validation_data,
                                       self.controls)
