@@ -4,19 +4,17 @@
 import os
 import time
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
+import operator
 
 # external libs
 import numpy as np
-from scipy.io import loadmat
 import matplotlib.pyplot as plt
 import pandas as pd
 import tables
 import yaml
 from scipy.optimize import curve_fit
-from gaitanalysis import motek
-from gaitanalysis.gait import GaitData, plot_gait_cycles
-from gaitanalysis.controlid import SimpleControlSolver
+from gaitanalysis import motek, gait, controlid
 from gaitanalysis.utils import _percent_formatter
 from dtk.process import coefficient_of_determination
 
@@ -112,7 +110,7 @@ def load_data(event, paths, tmp):
 
         # Compute the lower limb 2D inverse dynamics, identify right heel
         # strike times, and split the data into gait cycles.
-        gait_data = GaitData(perturbed_df)
+        gait_data = gait.GaitData(perturbed_df)
         marker_set = dflow_data.meta['trial']['marker-set']
         # TODO : This should use the mass from the force plate measurements
         # instead of the self reported mass.
@@ -131,7 +129,7 @@ def load_data(event, paths, tmp):
     else:
         print('Loading processed {} data from file...'.format(event))
         f.close()
-        gait_data = GaitData(tmp_data_path)
+        gait_data = gait.GaitData(tmp_data_path)
 
     return gait_data
 
@@ -591,7 +589,7 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
         inv_dyn_labels = \
             motek.markers_for_2D_inverse_dynamics(marker_set=marker_set)
 
-        walking_data = GaitData(data_frame)
+        walking_data = gait.GaitData(data_frame)
 
         subject_mass = meta_data['subject']['mass']
         args = list(inv_dyn_labels) + [subject_mass, inv_dyn_low_pass_cutoff]
@@ -604,7 +602,7 @@ def write_inverse_dynamics_to_disk(data_frame, meta_data,
         msg = 'Loading pre-computed inverse dynamics from {}.'
         print(msg.format(walking_data_path))
         f.close()
-        walking_data = GaitData(walking_data_path)
+        walking_data = gait.GaitData(walking_data_path)
 
     return walking_data, walking_data_path
 
@@ -637,7 +635,7 @@ def section_into_gait_cycles(gait_data, gait_data_path,
         getem()
     else:
         f.close()
-        gait_data = GaitData(gait_data_path)
+        gait_data = gait.GaitData(gait_data_path)
         if not hasattr(gait_data, 'gait_cycles') or force is True:
             getem()
         else:
@@ -697,10 +695,11 @@ def find_joint_isolated_controller(gait_cycles, event_data_path):
     # Use the first 3/4 of the gait cycles to compute the gains and validate on
     # the last 1/4. Most runs seem to be about 500 gait cycles.
     num_gait_cycles = gait_cycles.shape[0]
-    solver = SimpleControlSolver(gait_cycles.iloc[:num_gait_cycles * 3 / 4],
-                                 sensors,
-                                 controls,
-                                 validation_data=gait_cycles.iloc[num_gait_cycles * 3 / 4:])
+    solver = controlid.SimpleControlSolver(
+        gait_cycles.iloc[:num_gait_cycles * 3 / 4],
+        sensors,
+        controls,
+        validation_data=gait_cycles.iloc[num_gait_cycles * 3 / 4:])
 
     # Limit to angles and rates from one joint can only affect the moment at
     # that joint.
@@ -756,10 +755,11 @@ def find_full_gain_matrix_controller(gait_cycles, event_data_path):
     # Use the first 3/4 of the gait cycles to compute the gains and validate on
     # the last 1/4. Most runs seem to be about 500 gait cycles.
     num_gait_cycles = gait_cycles.shape[0]
-    solver = SimpleControlSolver(gait_cycles.iloc[:num_gait_cycles * 3 / 4],
-                                 sensors,
-                                 controls,
-                                 validation_data=gait_cycles.iloc[num_gait_cycles * 3 / 4:])
+    solver = controlid.SimpleControlSolver(
+        gait_cycles.iloc[:num_gait_cycles * 3 / 4],
+        sensors,
+        controls,
+        validation_data=gait_cycles.iloc[num_gait_cycles * 3 / 4:])
 
     try:
         f = open(gain_data_h5_path)
@@ -1167,9 +1167,10 @@ def plot_unperturbed_to_perturbed_comparision(trial_number):
     num_unperturbed_gait_cycles = unperturbed_gait_cycles.shape[0]
     num_perturbed_gait_cycles = perturbed_gait_cycles.shape[0]
 
-    axes = plot_gait_cycles(perturbed_gait_cycles, *variables, mean=True)
-    axes = plot_gait_cycles(unperturbed_gait_cycles, *variables, mean=True,
-                            axes=axes, color='red')
+    axes = gait.plot_gait_cycles(perturbed_gait_cycles, *variables,
+                                 mean=True)
+    axes = gait.plot_gait_cycles(unperturbed_gait_cycles, *variables,
+                                 mean=True, axes=axes, color='red')
 
     axes[0].legend(['Perturbed: {} cycles'.format(num_perturbed_gait_cycles),
                     'Un-Perturbed: {} cycles'.format(num_unperturbed_gait_cycles)],
@@ -1452,10 +1453,14 @@ class Trial(object):
             f = open(event_data_path)
         except IOError:
             print('Cleaning the data.')
-            dflow_data = motek.DFlowData(*self.trial_file_paths)
-            dflow_data.clean_data(ignore_hbm=True)
-            event_data_frame = dflow_data.extract_processed_data(
-                event=event, index_col='Cortex Time', isb_coordinates=True)
+            if event == 'Artificial Data':
+                event_data_frame = self._generate_artificial_data()
+            else:
+                dflow_data = motek.DFlowData(*self.trial_file_paths)
+                dflow_data.clean_data(ignore_hbm=True)
+                event_data_frame = dflow_data.extract_processed_data(
+                    event=event, index_col='Cortex Time',
+                    isb_coordinates=True)
             print('Saving cleaned data: {}'.format(event_data_path))
             # TODO : Change the event name in the HDF5 file into one that is
             # natural naming compliant for PyTables.
@@ -1466,6 +1471,56 @@ class Trial(object):
             event_data_frame = pd.read_hdf(event_data_path, event)
 
         self.event_data_frames[event] = event_data_frame
+
+    def _generate_artificial_data(self, num_cycles=400):
+
+        m_set = self.meta_data['trial']['marker-set']
+        measurements = motek.markers_for_2D_inverse_dynamics(m_set)
+        measurement_list = reduce(operator.add, measurements)
+        marker_list = reduce(operator.add, measurements[:2])
+
+        if 'First Normal Walking' not in self.gait_data_objs:
+            self.prep_data('First Normal Walking')
+
+        gait_data = self.gait_data_objs['First Normal Walking']
+        normal_cycle = gait_data.gait_cycles.iloc[20]  # 20th cycle
+        normal_cycle = normal_cycle[['Original Time'] +
+                                    measurement_list].copy()
+        smoothed_cycle = normal_cycle.copy()
+
+        time = normal_cycle['Original Time'].values
+
+        cycle_freq = 1.0 / (time[-1] - time[0])  # gait cycle / sec
+        cycle_omega = 2.0 * np.pi * cycle_freq  # rad /sec
+
+        # TODO: It would be preferable to use the maximum number of cycle
+        # samples as possible and as low as order Fourier series order as
+        # needed. But for now it uses the maximum Fourier order for the
+        # number of samples in each cycle.
+        fourier_order = self.num_cycle_samples / 2 - 1
+        initial_coeff = np.ones(1 + 2 * fourier_order)
+
+        for measurement in measurement_list:
+            signal = normal_cycle[measurement].values
+            popt, pcov = fit_fourier(time, signal, initial_coeff, cycle_omega)
+            eval_fourier = fourier_series(cycle_omega)
+            smoothed_cycle[measurement] = eval_fourier(time, *popt)
+
+        fake_cycles = {}
+        for i in range(num_cycles):
+            fake_cycles[i] = smoothed_cycle.copy()
+
+        artificial_data_frame = pd.concat(fake_cycles, ignore_index=True)
+        artificial_data_frame.index = np.linspace(
+            0.0, len(artificial_data_frame) * 0.01 - 0.01,
+            len(artificial_data_frame))
+
+        # Only add noise to the marker data.
+        shape = artificial_data_frame[marker_list].shape
+        artificial_data_frame[marker_list] += np.random.normal(scale=0.005,
+                                                               size=shape)
+
+        return artificial_data_frame
 
     @time_function
     def _write_inverse_dynamics_to_disk(self, event):
@@ -1479,12 +1534,12 @@ class Trial(object):
             f = open(gait_data_path)
         except IOError:
             print('Computing the inverse dynamics.')
+
+            gait_data = gait.GaitData(self.event_data_frames[event])
+
             marker_set = self.meta_data['trial']['marker-set']
             inv_dyn_labels = motek.markers_for_2D_inverse_dynamics(
                 marker_set=marker_set)
-
-            gait_data = GaitData(self.event_data_frames[event])
-
             subject_mass, _ = self.subject_mass()
             args = list(inv_dyn_labels) + [subject_mass, cutoff_freq]
 
@@ -1496,7 +1551,7 @@ class Trial(object):
             msg = 'Loading pre-computed inverse dynamics from {}.'
             print(msg.format(gait_data_path))
             f.close()
-            gait_data = GaitData(gait_data_path)
+            gait_data = gait.GaitData(gait_data_path)
 
         self.gait_data_objs[event] = gait_data
 
@@ -1515,8 +1570,12 @@ class Trial(object):
                                     threshold=self.grf_threshold)
 
             print('Spliting the data into gait cycles.')
+            if event == 'Artificial Data':
+                belt_col = None
+            else:
+                belt_col = 'RightBeltSpeed'
             gait_data.split_at('right', num_samples=self.num_cycle_samples,
-                               belt_speed_column='RightBeltSpeed')
+                               belt_speed_column=belt_col)
 
             gait_data.save(gait_data_path)
 
@@ -1526,7 +1585,7 @@ class Trial(object):
             compute(gait_data)
         else:
             f.close()
-            gait_data = GaitData(gait_data_path)
+            gait_data = gait.GaitData(gait_data_path)
             if not hasattr(gait_data, 'gait_cycles') or force is True:
                 compute(gait_data)
             else:
@@ -1704,8 +1763,9 @@ class Trial(object):
         # Use the first 3/4 of the gait cycles to compute the gains and
         # validate on the last 1/4. Most runs seem to be about 500 gait
         # cycles.
-        solver = SimpleControlSolver(id_cycles, self.sensors, self.controls,
-                                     validation_data=val_cycles)
+        solver = controlid.SimpleControlSolver(id_cycles, self.sensors,
+                                               self.controls,
+                                               validation_data=val_cycles)
 
         gain_inclusion_matrix = self._gain_inclusion_matrix(structure)
 
