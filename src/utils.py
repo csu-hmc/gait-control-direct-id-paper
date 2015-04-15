@@ -1412,6 +1412,8 @@ class Trial(object):
         self._setup_processed_data_paths()
 
         self.meta_data = load_meta_data(self.trial_file_paths[2])
+
+        # gait landmark identification settings
         self.grf_filter_frequency = settings[trial_number][0]
         self.grf_threshold = settings[trial_number][1]
         self.num_samples_lower_bound = settings[trial_number][2]
@@ -1423,6 +1425,26 @@ class Trial(object):
         self.identification_results = defaultdict(dict)
 
     def _setup_processed_data_paths(self):
+
+        """
+
+        data type:num cycle samples:<control structure>:trial # + event
+
+        processed-data/
+        |
+        --> cleaned-data/
+        |   |
+        |   --> XXX-event.h5
+        |
+        --> gait-data
+        |   |
+        |   -->XXX-event.h5
+        |
+        --> gains
+            |
+            --> joint-isolated/XXX-event.h5
+
+        """
 
         self.processed_data_sub_dirs = ['cleaned-data', 'gait-data',
                                         'gains', 'gains/joint-isolated',
@@ -1479,10 +1501,14 @@ class Trial(object):
         measurement_list = reduce(operator.add, measurements)
         marker_list = reduce(operator.add, measurements[:2])
 
-        if 'First Normal Walking' not in self.gait_data_objs:
-            self.prep_data('First Normal Walking')
+        base_event = 'First Normal Walking'
+        self._write_event_data_frame_to_disk(base_event)
+        gait_data = gait.GaitData(self.event_data_frames[base_event])
+        gait_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
+                                filter_frequency=self.grf_filter_frequency,
+                                threshold=self.grf_threshold)
+        gait_data.split_at('right')  # does max num samples per cycle
 
-        gait_data = self.gait_data_objs['First Normal Walking']
         normal_cycle = gait_data.gait_cycles.iloc[20]  # 20th cycle
         normal_cycle = normal_cycle[['Original Time'] +
                                     measurement_list].copy()
