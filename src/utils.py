@@ -1474,7 +1474,7 @@ class Trial(object):
         try:
             f = open(event_data_path)
         except IOError:
-            print('Cleaning the data.')
+            print('Cleaning the {} data.'.format(event))
             if event == 'Artificial Data':
                 event_data_frame = self._generate_artificial_data()
             else:
@@ -1502,14 +1502,17 @@ class Trial(object):
         marker_list = reduce(operator.add, measurements[:2])
 
         base_event = 'First Normal Walking'
-        self._write_event_data_frame_to_disk(base_event)
+        if base_event not in self.event_data_frames:
+            self._write_event_data_frame_to_disk(base_event)
         gait_data = gait.GaitData(self.event_data_frames[base_event])
         gait_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
                                 filter_frequency=self.grf_filter_frequency,
                                 threshold=self.grf_threshold)
-        gait_data.split_at('right')  # does max num samples per cycle
+        gait_data.split_at('right')
 
-        normal_cycle = gait_data.gait_cycles.iloc[20]  # 20th cycle
+        cycle_idx = 20  # 21st gait cycle
+        normal_cycle = gait_data.gait_cycles.iloc[cycle_idx]
+
         normal_cycle = normal_cycle[['Original Time'] +
                                     measurement_list].copy()
         smoothed_cycle = normal_cycle.copy()
