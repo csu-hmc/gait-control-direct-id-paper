@@ -1508,7 +1508,7 @@ class Trial(object):
         gait_data.grf_landmarks('FP2.ForY', 'FP1.ForY',
                                 filter_frequency=self.grf_filter_frequency,
                                 threshold=self.grf_threshold)
-        gait_data.split_at('right')
+        gait_data.split_at('right', num_samples=self.num_samples_lower_bound)
 
         cycle_idx = 20  # 21st gait cycle
         normal_cycle = gait_data.gait_cycles.iloc[cycle_idx]
