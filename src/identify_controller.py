@@ -16,7 +16,7 @@ from gait_landmark_settings import settings
 PATHS = utils.config_paths()
 
 
-def main(event, structure):
+def main(event, structure, recompute):
 
     trial_numbers = sorted(settings.keys())
 
@@ -35,6 +35,10 @@ def main(event, structure):
         print('=' * len(msg))
 
         trial = utils.Trial(trial_number)
+
+        if recompute:
+            trial.remove_precomputed_data()
+
         trial.identify_controller(event, structure)
 
         fig, axes = trial.plot_joint_isolated_gains(event, structure)
@@ -83,6 +87,9 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--structure', type=str, help=msg,
                         default='joint isolated')
 
+    msg = ("Force recomputation of all data.")
+    parser.add_argument('-r', '--recompute', action="store_true", help=msg)
+
     args = parser.parse_args()
 
-    main(args.event, args.structure)
+    main(args.event, args.structure, args.recompute)
