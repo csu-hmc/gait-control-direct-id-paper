@@ -1,4 +1,4 @@
-#/usr/bin/env python
+#!/usr/bin/env python
 
 """This is an attempt to drive the gait2d model with a controller derived
 from real data."""
@@ -21,17 +21,13 @@ import utils
 import simulation
 from grf_landmark_settings import settings
 
-# debugging
-from IPython.core.debugger import Pdb
-pdb = Pdb()
-
 # load the data and find a controller
 trial_number = '068'
+trial = utils.Trial(trial_number)
+trial._write_event_data_frame_to_disk('Longitudinal Perturbation')
+event_data_frame = trial.event_data_frames['Longitudinal Perturbation']
 
-event_data_frame, meta_data, event_data_path = \
-    utils.write_event_data_frame_to_disk(trial_number)
-
-event_data_frame = utils.estimate_trunk_somersault_angle(event_data_frame)
+event_data_frame = simulation.estimate_trunk_somersault_angle(event_data_frame)
 
 # TODO : will likely need to low pass filter the two time derivatives
 
@@ -43,28 +39,22 @@ event_data_frame['RGTRO.VelY'] = \
     process.derivative(event_data_frame.index.values.astype(float),
                        event_data_frame['RGTRO.PosY'], method='combination')
 
-walking_data, walking_data_path = \
-    utils.write_inverse_dynamics_to_disk(event_data_frame, meta_data,
-                                         event_data_path)
+# TODO : Ensure that the modified data frame is infact the one in the Trial
+# object.
+trial._write_inverse_dynamics_to_disk('Longitudinal Perturbation', force=True)
+trial._section_into_gait_cycles('Longitudinal Perturbation', force=True)
 
-params = settings[trial_number]
-gait_cycles, walking_data = \
-    utils.section_into_gait_cycles(walking_data, walking_data_path,
-                                   filter_frequency=params[0],
-                                   threshold=params[1],
-                                   num_samples_lower_bound=params[2],
-                                   num_samples_upper_bound=params[3])
+gait_data = trial.gait_data_objs['Longitudinal Perturbation']
 
 sensor_labels, control_labels, result, solver = \
-    utils.find_joint_isolated_controller(gait_cycles, event_data_path)
-
+    trial.identification_results('Longitudinal Perturbation', 'joint isolated')
 
 # Define a simulation controller based off of the results of the
 # identification.
 # TODO : I likely need to take the mean of the left at right gains so things are
 # symmetric.
-mean_cycle_time = walking_data.gait_cycle_stats['Stride Duration'].mean()
-percent_gait_cycle = gait_cycles.iloc[0].index.values.astype(float)  # n
+mean_cycle_time = gait_data.gait_cycle_stats['Stride Duration'].mean()
+percent_gait_cycle = gait_data.gait_cycles.iloc[0].index.values.astype(float)  # n
 m_stars = result[1]  # n x q
 gain_matrices = result[0]  # n x q x p
 
@@ -85,6 +75,7 @@ state_sign[17] = -1.0
 # This is a cheap trick to set the correct signs for the moments.
 specified_sign = np.array([1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0])
 
+
 def controller(x, t):
     # this will need extrapolation (the first answer doesn't work for
     # interpolating N dimenaional arrays).
@@ -103,7 +94,7 @@ def controller(x, t):
     # 6 joint torques in the order of the control identifier
     joint_torques = current_m_star - np.dot(current_gain, x[state_indices])
 
-    lift_force = 9.81 * meta_data['subject']['mass']
+    lift_force = 9.81 * trial.meta_data['subject']['mass']
     lift_force = 0.0
 
     return specified_sign * np.hstack(([0.0, lift_force, 0.0], 0.1 * joint_torques[control_indices]))
@@ -173,7 +164,7 @@ args = {'constants': np.array([constant_values[c] for c in constants]),
 
 time_vector = np.linspace(0.0, 0.5, num=1000)
 
-mean_of_gait_cycles = gait_cycles.mean(axis='items')
+mean_of_gait_cycles = gait_data.gait_cycles.mean(axis='items')
 
 initial_conditions = np.zeros(18)
 

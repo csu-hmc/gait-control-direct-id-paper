@@ -35,15 +35,14 @@ time_sections = {'020': (None, 14.0),
 
 subject_data = defaultdict(list)
 
-trials_dir = utils.trial_data_dir()
+trials_dir = utils.config_paths()['raw_data_dir']
 trial_dirs = [x[0] for x in os.walk(trials_dir) if x[0][-4] == 'T']
 trial_nums = [x[-3:] for x in trial_dirs if x[-3:] not in ['001', '002']]
 
 for trial_number in trial_nums:
 
-    trial_dir = os.path.join(trials_dir, 'T' + trial_number)
-    paths = utils.trial_file_paths(trials_dir, trial_number)
-    meta_data = utils.load_meta_data(paths[2])
+    trial = utils.Trial(trial_number)
+    meta_data = trial.meta_data
 
     # For subject 1 we use the self reported value because there is no
     # "Calibration Pose" event. For subject 11 and subject 4, we use the
@@ -55,31 +54,9 @@ for trial_number in trial_nums:
         print(msg)
         print('=' * len(msg))
 
-        event_data_frame, meta_data, event_data_path = \
-            utils.write_event_data_frame_to_disk(trial_number,
-                                                 event='Calibration Pose')
+        actual_mass, std = trial.subject_mass()
 
-        # This is the time varying mass during the calibration pose.
-        event_data_frame['Mass'] = (event_data_frame['FP1.ForY'] +
-                                    event_data_frame['FP1.ForY']) / 9.81
-
-        if trial_number in time_sections:
-            start = time_sections[trial_number][0]
-            stop = time_sections[trial_number][1]
-            if start is None:
-                stop = event_data_frame.index[0] + stop
-            elif stop is None:
-                start = event_data_frame.index[-1] + start
-        else:
-            start = None
-            stop = None
-
-        valid = event_data_frame['Mass'].loc[start:stop]
-
-        actual_mass = valid.mean()
-        std = valid.std()
-        max_mass = valid.max()
-        min_mass = valid.min()
+        event_data_frame = trial.event_data_frames['Calibration Pose']
 
         reported_mass = meta_data['subject']['mass']
 

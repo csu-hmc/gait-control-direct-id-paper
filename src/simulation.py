@@ -190,7 +190,7 @@ def load_open_loop_trajectories():
     """
 
     # this loads a half gait cycle solution
-    d = loadmat(os.path.join(utils.tmp_data_dir(),
+    d = loadmat(os.path.join(utils.config_paths()['processed_data_dir'],
                              'optimal-open-loop-trajectories.mat'))
 
     # The trunk degrees of freedom stay the same but the left and right need
