@@ -223,23 +223,10 @@ def tmp_data_dir(default='data'):
     return tmp_dir
 
 
-def trial_data_dir(default='.'):
+def trial_data_dir():
     """Returns the trials directory."""
 
-    # If there is a config file in the current directory, then load it, else
-    # set the default data directory to current directory.
-    try:
-        f = open('config.yml')
-    except IOError:
-        trials_dir = default
-    else:
-        config_dict = yaml.load(f)
-        trials_dir = config_dict['root_data_directory']
-        f.close()
-
-    print('Trials data directory is set to {}'.format(trials_dir))
-
-    return trials_dir
+    return config_paths()['raw_data_dir']
 
 
 def generate_meta_data_tables(trials_dir, top_level_key='TOP', key_sep='|'):
@@ -1667,8 +1654,7 @@ class Trial(object):
         first_event = 'First Normal Walking'
         second_event = 'Second Normal Walking'
 
-        self.prep_data(first_event)
-        self.prep_data(second_event)
+        self.prep_data('Normal Walking')
 
         first_cycles, first_stats = self._remove_bad_gait_cycles(first_event)
         second_cycles, second_stats = self._remove_bad_gait_cycles(second_event)
