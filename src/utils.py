@@ -829,6 +829,7 @@ class Trial(object):
                 'Left.Knee.Flexion.Moment',
                 'Left.Hip.Flexion.Moment']
 
+    # TODO : If num_cycle_samples is not 20 don't save the data to disk.
     num_cycle_samples = 20
 
     def __init__(self, trial_number):
@@ -1106,6 +1107,8 @@ class Trial(object):
         return gait_data.gait_cycles.iloc[mid_values.index], mid_values
 
     def merge_normal_walking(self):
+        """Returns a gait cycle Panel that contains the valid gait cycles
+        from both of the normal walking events."""
 
         first_event = 'First Normal Walking'
         second_event = 'Second Normal Walking'
@@ -1136,6 +1139,7 @@ class Trial(object):
 
         print("Computing the subject's mass.")
 
+        # TODO : This data belongs in a data file, not here.
         # Some of the trials have anomalies in the data after the
         # calibration pose due to the subjects' movement. The following
         # gives best estimates of the sections of the event that are
