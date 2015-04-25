@@ -16,26 +16,11 @@ import pandas as pd
 # local
 import utils
 
-# Some of the trials have anomalies in the data after the calibration pose
-# due to the subjects' movement. The following gives best estimates of the
-# sections of the event that are suitable to use in the subjects mass
-# computation. The entire time series is acceptable for trials not listed.
-
-time_sections = {'020': (None, 14.0),
-                 '021': (None, 14.0),
-                 '031': (-14.0, None),
-                 '047': (None, 12.0),
-                 '048': (None, 7.0),
-                 '055': (-12.0, None),
-                 '056': (-3.0, None),  # also the first 2 seconds
-                 '057': (-8.0, None),
-                 '063': (None, 6.0),  # also the last 6 seconds
-                 '069': (None, 14.0),
-                 '078': (None, 15.0)}
+PATHS = utils.config_paths()
 
 subject_data = defaultdict(list)
 
-trials_dir = utils.config_paths()['raw_data_dir']
+trials_dir = PATHS['raw_data_dir']
 trial_dirs = [x[0] for x in os.walk(trials_dir) if x[0][-4] == 'T']
 trial_nums = [x[-3:] for x in trial_dirs if x[-3:] not in ['001', '002']]
 
@@ -93,7 +78,9 @@ for trial_number in trial_nums:
         ax.legend()
         ax.set_ylabel('Mass [kg]')
 
-        fig.savefig('../figures/mass-' + trial_number + '.png', dpi=300)
+        fig_dir = PATHS['figures_dir']
+        fig.savefig(os.path.join(fig_dir, 'subject-mass',
+                                 'mass-' + trial_number + '.png'), dpi=300)
         plt.close(fig)
 
     elif meta_data['subject']['id'] != 0:
@@ -113,8 +100,10 @@ subject_df = pd.DataFrame(subject_data)
 grouped = subject_df.groupby('Subject ID')
 
 mean = grouped.mean()
-
 # This sets the grouped standard deviation to the correct value following
 # uncertainty propagation for the mean function.
 mean['Standard Deviation'] = grouped.agg({'Standard Deviation': lambda x:
                                           np.sqrt(np.sum(x**2) / len(x))})
+
+path = os.path.join(PATHS['processed_data_dir'], 'subject_table.h5')
+mean.to_hdf(path, 'subject_table')
