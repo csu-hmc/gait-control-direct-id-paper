@@ -8,6 +8,7 @@ import os
 import argparse
 
 # external
+import pandas as pd
 import matplotlib.pyplot as plt
 
 # local
@@ -37,7 +38,7 @@ def main(event, structure):
         mean_gains, var_gains = utils.mean_gains(
             trial_numbers, utils.Trial.sensors, utils.Trial.controls,
             utils.Trial.num_cycle_samples, file_name_safe_event,
-            file_name_safe_structure)
+            file_name_safe_structure, scale_by_mass=False)
 
         mean_gains_per_speed[speed] = mean_gains
 

@@ -615,7 +615,7 @@ def plot_validation(estimated_controls, continuous, vafs):
 
 
 def mean_gains(trial_numbers, sensors, controls, num_gains, event,
-               structure):
+               structure, scale_by_mass=False):
     """
     Parameters
     ==========
@@ -636,6 +636,9 @@ def mean_gains(trial_numbers, sensors, controls, num_gains, event,
 
     data_dir = config_paths()['processed_data_dir']
 
+    sub_tab_path = os.path.join(data_dir, 'subject_table.h5')
+    mass_tab = pd.read_hdf(sub_tab_path, 'subject_table')
+
     all_gains = np.zeros((len(trial_numbers),
                           num_gains,
                           len(controls),
@@ -650,10 +653,18 @@ def mean_gains(trial_numbers, sensors, controls, num_gains, event,
         file_name_template = '{}-{}.npz'
         file_name = file_name_template.format(trial_number, event)
         gain_data_npz_path = os.path.join(data_dir, 'gains', structure, file_name)
+
+        subject_id = Trial(trial_number).meta_data['trial']['subject-id']
+        mass = mass_tab['Measured Mass'].loc[subject_id]
+
         with np.load(gain_data_npz_path) as npz:
             # n, q, p
-            all_gains[i] = npz['arr_0']
-            all_var[i] = npz['arr_3']
+            if scale_by_mass:
+                all_gains[i] = npz['arr_0'] / mass
+                all_var[i] = npz['arr_3'] / mass
+            else:
+                all_gains[i] = npz['arr_0']
+                all_var[i] = npz['arr_3']
 
     # The mean of the gains across trials and the variabiilty of the gains
     # across trials.
@@ -840,10 +851,16 @@ class Trial(object):
         self.meta_data = load_meta_data(self.trial_file_paths[2])
 
         # gait landmark identification settings
-        self.grf_filter_frequency = settings[trial_number][0]
-        self.grf_threshold = settings[trial_number][1]
-        self.num_samples_lower_bound = settings[trial_number][2]
-        self.num_samples_upper_bound = settings[trial_number][3]
+        # if one isn't specified in the file it is just set to None
+        attrs = ['grf_filter_frequency',
+                 'grf_threshold',
+                 'num_samples_lower_bound',
+                 'num_samples_upper_bound']
+        for i, attr in enumerate(attrs):
+            try:
+                setattr(self, attr, settings[trial_number][i])
+            except KeyError:
+                setattr(self, attr, None)
 
         self.event_data_frames = {}
         self.gait_data_objs = {}
