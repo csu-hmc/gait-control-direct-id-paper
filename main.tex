@@ -24,6 +24,8 @@
 \author{Jason K. Moore and Antonie van den Bogert}
 
 \title{Direct Control Identification in Human Gait}
+\title{Directly Identified Gait Phase Scheduled Feedback Gains Exhibit Positive
+  and Negative Feedback}
 
 \date{}
 
@@ -34,6 +36,10 @@
 \section*{TODO}
 
 \listoftodos
+
+\begin{abstract}
+  \todo[inline]{Write one!}
+\end{abstract}
 
 \section*{Introduction}
 %
@@ -57,8 +63,21 @@ There are other researchers thinking along these lines. Elliot Rouse identified
 the parameters of a linear model of the ankle's passive and active stiffness
 and damping by perturbing around 400 stance phases of the gait cycle and
 fitting a model with linear least squares. \cite{Wang2013} are able to predict
-the foot placement with a simple lienar model derived from kinematic data.
-%
+foot placement with a simple linear model derived from kinematic data that
+relates the mid-stance pelvic state with the following foot location. Neither
+of these explicitly tease out the feedback mechanism.
+
+Given a ``human-like'' system, i.e. one with similar degrees of freedom and
+inertial properties to a human, can we identify a feedback control mechanism
+for this system that causes it to recover from perturbations like a human does?
+
+We answer this question by collecting greater than 15,000 gait cycles from 11
+subjects walking at three nominal speeds on an instrumented treadmill where we
+measure the kinematics of a full body marker set and a full set of ground
+reaction loads at each foot while perturbing the subject by varying the belt
+speed. We then identify a gait phase gain scheduled non-linear controller with
+the direct identification method~\cite{Ljung1999}.
+
 \section*{Methods}
 %
 \subsection*{Experiments}
@@ -297,7 +316,33 @@ by the identified control model.
     \label{fig:fit}
   \end{center}
 \end{figure}
+\subsection{Gains exhibit antomical symmetry}
 %
+
+\subsection*{Gains are consistent across subjects}
+%
+We compute the body mass normalized mean gains, $\bar{\mathbf{K}}(\varphi)$
+across subjects to examine the inter-subject differences.
+Figure~\ref{fig:mean-gains-1.2} shows the mean and standard deviation of the
+gains identified from a joint isolated control structure at the
+1.2~\si{\meter\per\second} nominal speed.
+%
+\begin{figure}
+  \begin{center}
+    \includegraphics{figures/mean-gains-1.2.pdf}
+    \caption{}
+    \label{fig:mean-gains-1.2}
+  \end{center}
+\end{figure}
+
+The gains exhibit similar patterns, albeit with relatively large standard
+deviations, across subjects. The differences in left and right sides are even
+constant
+
+\subsection{Directly Identified Gait Phase Scheduled Feedback Gains Exhibit Positive
+  and Negative Feedback}
+%
+The gains 
 \subsection*{Random variations predict random gains}
 %
 If the variation in the sensor and actuator measurements is purely random, the
