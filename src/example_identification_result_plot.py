@@ -36,10 +36,10 @@ event = 'Longitudinal Perturbation'
 structure = 'joint isolated'
 
 trial = utils.Trial(trial_number)
-trial.remove_precomputed_data()
+#trial.remove_precomputed_data()
 trial.identify_controller(event, structure)
 
-fig, axes = trial.plot_joint_isolated_gains(event, structure)
+fig, axes = trial.plot_joint_isolated_gains(event, structure, normalize=True)
 plt.tight_layout()
 filename = 'example-identified-joint-isolated-gains.pdf'
 fig.savefig(os.path.join(paths['figures_dir'], filename))

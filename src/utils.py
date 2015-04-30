@@ -1281,34 +1281,74 @@ class Trial(object):
 
     @time_function
     def plot_joint_isolated_gains(self, event, structure, axes=None,
-                                  show_gain_std=True, linestyle='-'):
+                                  show_gain_std=True, linestyle='-',
+                                  normalize=False, show_trajectories=True):
         """Plots a 3 x 3 subplot where the columns corresond to a joint
         (ankle, knee, hip). The top show shows the proportional gain plots
         and the bottom row shows the derivative gain plots. The middle row
         plots the mean angle and angular rate on a plotyy chart.
 
+        Parameters
+        ==========
+        show_gain_std : boolean
+            If true, the standard deviation of the gains with respect to the
+            fit variance will be shown.
+        normalize : boolean
+            If true the gains will be normalized by the subjects mass before
+            plotting.
+        show_trajectories : boolean
+            If false the trajectory plots will be excluded.
+
         """
 
-        gains = self.identification_results[event][structure][0]
-        gains_variance = self.identification_results[event][structure][3]
+        # gains
+        # gain_var
+        # gait_cycles
+        # mass
+        # sensors and actuators
 
-        if event == 'Normal Walking':
-            gait_cycles = self.merge_normal_walking()
+        gains = self.identification_results[event][structure][0].copy()
+        gains_variance = self.identification_results[event][structure][3].copy()
+        gains_std = np.sqrt(gains_variance)
+
+        percent_of_gait_cycle = np.linspace(0.0, 1.0 - 1.0 / gains.shape[0],
+                                            num=gains.shape[0])
+
+        if normalize:
+            mass, _ = self.subject_mass()
+            gains /= mass
+            gains_std /= mass
+            unit_mod = '/kg'
         else:
-            gait_cycles, _ = self._remove_bad_gait_cycles(event)
+            unit_mod = ''
 
-        mean_gait_cycles = gait_cycles.mean(axis='items')
+        if plt.rcParams['text.usetex']:
+            dot = r'$\cdot$'
+        else:
+            dot = r''
 
-        print('Generating gain plot.')
+        row_types = ['Angle', 'Rate']
+        units = ['Nm/rad{}'.format(unit_mod),
+                 r'Nm {} s/rad{}'.format(dot, unit_mod)]
+
+        if show_trajectories:
+
+            row_types.insert(1, 'Trajectory')
+            units.insert(1, None)
+
+            if event == 'Normal Walking':
+                gait_cycles = self.merge_normal_walking()
+            else:
+                gait_cycles, _ = self._remove_bad_gait_cycles(event)
+
+            mean_gait_cycles = gait_cycles.mean(axis='items')
 
         if axes is None:
-            fig, axes = plt.subplots(3, 3, sharex=True)
+            fig, axes = plt.subplots(len(row_types), 3, sharex=True)
         else:
             fig = axes[0, 0].figure
 
-        for i, (row, unit) in enumerate(
-            zip(['Angle', 'Trajectory', 'Rate'],
-                ['Nm/rad', None, r'Nm $\cdot$ s/rad'])):
+        for i, (row, unit) in enumerate(zip(row_types, units)):
 
             for j, (col, sign) in enumerate(
                 zip(['Ankle', 'Knee', 'Hip'],
@@ -1326,12 +1366,7 @@ class Trial(object):
                         gain_col_idx = self.controls.index(col_label)
 
                         gains_per = gains[:, gain_col_idx, gain_row_idx]
-                        sigma = np.sqrt(gains_variance[:, gain_col_idx,
-                                                       gain_row_idx])
-
-                        percent_of_gait_cycle = \
-                            np.linspace(0.0, 1.0 - 1.0 / gains.shape[0],
-                                        num=gains.shape[0])
+                        sigma = gains_std[:, gain_col_idx, gain_row_idx]
 
                         xlim = (0.0, 1.0)
 
@@ -1361,6 +1396,9 @@ class Trial(object):
                                                     alpha=0.5,
                                                     color=color)
 
+                        axes[i, j].axhline(0.0, linestyle='-',
+                                           color='black', label="_nolegend_")
+
                         axes[i, j].plot(percent_of_gait_cycle, gains_per,
                                         marker='o',
                                         ms=2,
@@ -1368,13 +1406,21 @@ class Trial(object):
                                         label=side,
                                         linestyle=linestyle)
 
-                        axes[i, j].set_title(r"{}: {} $\rightarrow$ Moment".format(col, row))
+                        if plt.rcParams['text.usetex']:
+                            title_template = r"{}: {} $\rightarrow$ Moment"
+                        else:
+                            title_template = r"{}: {} -> Moment"
+
+                        axes[i, j].set_title(title_template.format(col, row))
 
                         if j == 0:
                             axes[i, j].set_ylabel(unit)
 
-                        if i == 2:
-                            axes[i, j].set_xlabel(r'\% of Gait Cycle')
+                        if i == len(row_types) - 1:
+                            if plt.rcParams['text.usetex']:
+                                axes[i, j].set_xlabel(r'\% of Gait Cycle')
+                            else:
+                                axes[i, j].set_xlabel('% of Gait Cycle')
                             axes[i, j].xaxis.set_major_formatter(_percent_formatter)
                             axes[i, j].set_xlim(xlim)
 
