@@ -8,7 +8,7 @@ import os
 import argparse
 
 # external
-import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
 # local
@@ -38,20 +38,20 @@ def main(event, structure):
         mean_gains, var_gains = utils.mean_gains(
             trial_numbers, utils.Trial.sensors, utils.Trial.controls,
             utils.Trial.num_cycle_samples, file_name_safe_event,
-            file_name_safe_structure, scale_by_mass=False)
+            file_name_safe_structure, scale_by_mass=True)
 
         mean_gains_per_speed[speed] = mean_gains
 
         fig, axes = utils.plot_joint_isolated_gains(
             utils.Trial.sensors, utils.Trial.controls, mean_gains,
-            var_gains)
+            np.sqrt(var_gains), mass=1.0)
 
         fig.set_size_inches((14.0, 14.0))
         fig.savefig(os.path.join(plot_dir, 'mean-gains-' + speed + '.png'),
                     dpi=300)
         plt.close(fig)
 
-    fig, axes = plt.subplots(3, 2, sharex=True)
+    fig, axes = plt.subplots(2, 3, sharex=True)
     linestyles = ['-', '--', ':']
     speeds = ['0.8', '1.2', '1.6']
 
@@ -59,8 +59,9 @@ def main(event, structure):
         fig, axes = utils.plot_joint_isolated_gains(utils.Trial.sensors,
                                                     utils.Trial.controls,
                                                     mean_gains_per_speed[speed],
-                                                    var_gains, axes=axes,
-                                                    show_std=False,
+                                                    np.sqrt(var_gains),
+                                                    axes=axes,
+                                                    show_gain_std=False,
                                                     linestyle=linestyle)
     axes[0, 0].legend().set_visible(False)
     right_labels = ['Right ' + speed + ' [m/s]' for speed in speeds]
