@@ -16,10 +16,14 @@
 \usepackage{siunitx}
 
 % for less margin space
-\usepackage{fullpage}
+%\usepackage{fullpage}
 
 % for nice todo notes
 \usepackage{todonotes}
+
+% macros
+\newcommand{\mstar}{\mathbf{m}^*(\varphi)}
+\newcommand{\K}{\mathbf{K}(\varphi)}
 
 \author{Jason K. Moore and Antonie van den Bogert}
 
@@ -45,11 +49,22 @@
 %
 Recent research and commercial activity indicate that gait-related powered
 prosthetics will play an important role in both assisting humans with
-disabilities and enhancing the abities of able bodied. These devices include a
-variety of sensors and actuators than can be coupled to a control system to
-provide acutated gait assistance. However, for example, the available
+disabilities and enhancing the abilities of the able bodied. These devices
+include a variety of sensors and actuators than can be coupled to a control
+system to provide acutated gait assistance. However, for example, the available
 lightweight lower extremity exoskeletons lack gait that resembles an
-able-bodied human. It is difficult to design a controller from first principles
+able-bodied human both in terms of stability and ``natural'' gait motions.
+
+Given a ``human-like'' system, i.e. one with similar degrees of freedom and
+inertial properties to a human, that is actuated with simple joint torques can
+we identify a feedback control mechanism for this system that causes it to
+walk stably and recover from perturbations in much the same way a human does?
+
+We hypothesize that typical gait measurements taken while a person is
+walking under the influence of perturbations can be used to identify a
+feedback controller for a similar system.
+
+It is difficult to design a controller from first principles
 for this very non-linear system. Although work based on \cite{Geyer2010} are
 giving promising results in simulated musculoskeletal systems \cite{Wang2010,
 Geitenbeek2014}. Even though constraining the controller to rudimentary models
@@ -67,10 +82,6 @@ foot placement with a simple linear model derived from kinematic data that
 relates the mid-stance pelvic state with the following foot location. Neither
 of these explicitly tease out the feedback mechanism.
 
-Given a ``human-like'' system, i.e. one with similar degrees of freedom and
-inertial properties to a human, can we identify a feedback control mechanism
-for this system that causes it to recover from perturbations like a human does?
-
 We answer this question by collecting greater than 15,000 gait cycles from 11
 subjects walking at three nominal speeds on an instrumented treadmill where we
 measure the kinematics of a full body marker set and a full set of ground
@@ -83,7 +94,7 @@ the direct identification method~\cite{Ljung1999}.
 \subsection*{Experiments}
 %
 We make use of a subset of the gait data reported in \cite{Moore2015} and refer
-the reader to that publication for more details about the experiments and data.
+the reader to that publication for the details about the experiments and data.
 The subset of the data includes a large number of gait cycles for 11 subjects
 subjects walking at three nominal speeds on a treadmill with and without
 pseudo-random longitudinal perturbations, i.e fluctuations in the belt speed.
@@ -108,8 +119,8 @@ identifiers. We make use of an open source software package,
 GaitAnalysisToolKit, to process the data. The processing follows these steps:
 %
 \begin{enumerate}
-  \item Identify missing marker data.
-  \item Replace missing marker data with linearly interpolated values.
+  \item Identify missing markers and the corresponding time instances.
+  \item Replace missing markers with linearly interpolated values.
   \item Filter all signals with a forward/backward 2nd order low pass
     Butterworth filter with a cutoff frequency of 6~\si{\hertz}.
   \item Section the trials into unperturbed and perturbed sections based on the
@@ -120,15 +131,15 @@ GaitAnalysisToolKit, to process the data. The processing follows these steps:
     force.
   \item Segment the time series into gait cycles based on the right foot's
     heelstrikes.
-  \item Interpolate the time series in each gait cycle to a specific number of
-    data points so all gait cycles have the same number of samples.
-  \item Throw out any outlier gait cycles that were not properly identified due
-    to abnormal ground reaction force measurements.
+  \item Linearly interpolate the time series in each gait cycle to a specific
+    number of data points so all gait cycles have the same number of samples.
+  \item Remove any outlier gait cycles that were not properly identified due to
+    abnormal ground reaction force measurements.
 \end{enumerate}
 
 After the initial processing above, the data is stored in three dimensional
-arrays M x N x ?, where M is the number of gait cycles, N is the number of time
-instances in the gait cycle, and ? are the number of time series.
+arrays M x N x (q + p), where M is the number of gait cycles, N is the number of time
+instances in the gait cycle, and (q + p) are the number of measurements.
 Figure~\ref{fig:angle-torque-comparison} shows the mean and standard deviation
 of across the gait cycles for selected time series for both unperturbed and
 perturbed walking. Furthermore, Figure~\ref{fig:gait-cycle-stats-comparison}
@@ -182,11 +193,10 @@ from the nominal state trajectory that the controller computes additive joint
 torques based on the state tractory error to compensate for variation in gait
 away from the nomimal.
 
-The controller is designated as a gait phase scheduled gain matrix,
-$\mathbf{K}(\varphi)$ that relates the error in the state trajectories to the
-additive joint torques. The controller structure bounded by the box in
-Figure~\ref{fig:controller} can be described by the following algebraic
-equation.
+The controller is designated as a gait phase scheduled gain matrix, $\K$, that
+relates the error in the state trajectories to the additive joint torques. The
+controller structure bounded by the box in Figure~\ref{fig:controller} can be
+described by the following algebraic equation.
 %
 \begin{equation}
   \mathbf{m}(t) = \mathbf{m}_0(\varphi) + \mathbf{K}(\varphi) [\mathbf{s}_0(\varphi) - \mathbf{s}(t)]
@@ -268,70 +278,84 @@ validation data set to gauage how well the model predicts.
 \section*{Results}
 %
 The formulation above allows one to choose a variety of combinations of
-potential sensor, $\mathbf{s}(t)$, and control, $\mathbf{m}(t)$, signals to
-generate a controller. For this analyses we focus on a planar controller that
-involves the hip, knee, and ankle joints. The angle and angular rate of each
-joint are available as sensors and a torque at each joint are available as the
-actuators. Further more the formulation allows for different types of control
-that isolate sensors from actuators:
+potential sensor, $\mathbf{s}(t)$, and actuator, $\mathbf{m}(t)$, signals to
+generate a controller. For this analyses we assume we are constructing a
+controller for a planar robot that involves the hip, knee, and ankle joints.
+The angle and angular rate of each joint are available as sensors and a torque
+at each joint are available as the actuators.
+
+The most general case for the controller, $\K$, has q x p
+unknown entries. The formulation allows for different types of control that
+isolate actuators from sensors. We explore four of th
 
 \begin{description}
-  \item[Joint Isolated Control] The torque generated by a joint is only
-    affected by the sensors that give information about that joint.
-  \item[Side Isolated Control] The torque generated at a joint is only affected
-    by the sensors on the same side of the body.
   \item[Full Control] The torque genderated by a joint is affected by all of
     the available sensors.
+  \item[Side Isolated Control] The torque generated at a joint is only affected
+    by the sensors on the same side of the body.
+  \item[Joint Isolated Control] The torque generated by a joint is only
+    affected by the sensors that give information about that joint.
+  \item[No Feedback Control] The motion is only governed by $\mstar$.
+    \todo{Isn't the ``no feedback'' equivalent to $\mstar$ being equivalent to
+    the mean torques?}
 \end{description}
 
 \subsection*{Example Result}
 %
-The example data shown here was collected from a single subject (age: 29, mass:
-63 kg, height: 172 cm) walking on an instrumented treadmill (V-Gait, Motek
-Medical). The subject was longitudinally perturbed using random white noise
-with 10\% std around a nominal 1.2 m/s belt speed. Data was recorded for 8
-minutes at 100 Hz, which included approximately 500 steps of walking. Ankle
-plantarflexion, knee flexion, and hip flexion angles, rates, and moments were
-computed using 2D inverse dynamics.
+Once a controller is identified for a section of a trial the primary results of
+interest are the gain values and how they change with respect to the gait phase
+and then how well the model can predict the gait of the indepedent validation
+data. The actual gain values may give some insight to the physiological nature
+of the feedback mechanism. Here we present a typical result from a join
+isolated controller structure. Figure~\ref{fig:example-gains} \todo{Explain the
+shaded area: variance with respect to the fit.} shows the estimates of the
+scheduled gains with respect to the percent gait cycle in each leg as a
+function of the phase of the gait cycle. The top row of graphs show the
+proportional gains, the middle row provides reference mean trajectories of the
+sensor measurements, and the final row shows the derivative gains. Gains values
+greater than zero indicate negative feedback and gains below zero indicate
+positive feedback. \todo{The mismatch from positive feedback to negative K
+values is potetnially confusing, as Ton has pointed out before, but to me this
+is the standard way to describe a feedback system in control literature.}
 %
 \begin{figure}
   \begin{center}
     \includegraphics{figures/example-identified-joint-isolated-gains.pdf}
-    \caption{Gait phase percent scheduled gains for right (blue) and left (red) legs.}
+    \caption{Gait phase scheduled gains for the right (blue) and left
+      (red) legs.}
     \label{fig:example-gains}
   \end{center}
 \end{figure}
 
-Here we present an example result from a controller structure which is limited
-to joint torque generation only from error in the sensors from the same joint.
-Figure \ref{fig:gains} shows the estimates of the scheduled gains with respect
-to the percent gait cycle in each leg. Figure \ref{fig:fit} demonstrates an
-example prediction of the measured ankle plantarflexion torque in the right leg
-by the identified control model.
+Figure~\ref{fig:example-fit} shows an example prediction of the measured ankle
+plantarflexion torque in the right leg by the identified control model. The VAF
+is reported for the entire validation period whereas only a select number of
+gait cycles are shown. \todo{This plot technically shows the VAF based on the
+20 samples per cycle comparison, yet I plot all of the measured values, i.e.
+more like 100-120 samples per cycle.}
 %
 \begin{figure}
   \begin{center}
     \includegraphics{figures/example-identified-joint-isolated-fit.pdf}
     \caption{Predicted torque compared to independent validation data.}
-    \label{fig:fit}
+    \label{fig:example-fit}
   \end{center}
 \end{figure}
-\subsection{Gains exhibit antomical symmetry}
-%
 
 \subsection*{Gains are consistent across subjects}
 %
-We compute the body mass normalized mean gains, $\bar{\mathbf{K}}(\varphi)$
-across subjects to examine the inter-subject differences.
-Figure~\ref{fig:mean-gains-1.2} shows the mean and standard deviation of the
+We compute the body mass normalized gains, $\frac{\mathbf{K}(\varphi)}{m}$ for
+each subject at each nominal speed and examine the mean and standard deviation
+across subjects for the inter-subject differences.
+Figure~\ref{fig:mean-gains-1-2} shows the mean and standard deviation of the
 gains identified from a joint isolated control structure at the
 1.2~\si{\meter\per\second} nominal speed.
 %
 \begin{figure}
   \begin{center}
-    \includegraphics{figures/mean-gains-1.2.pdf}
-    \caption{}
-    \label{fig:mean-gains-1.2}
+    \includegraphics{figures/example-mean-gains-1-2.pdf}
+    \caption{Fill me in.}
+    \label{fig:mean-gains-1-2}
   \end{center}
 \end{figure}
 
@@ -339,10 +363,13 @@ The gains exhibit similar patterns, albeit with relatively large standard
 deviations, across subjects. The differences in left and right sides are even
 constant
 
+\subsection*{Gains exhibit anatomical symmetry}
+%
+
 \subsection{Directly Identified Gait Phase Scheduled Feedback Gains Exhibit Positive
   and Negative Feedback}
 %
-The gains 
+
 \subsection*{Random variations predict random gains}
 %
 If the variation in the sensor and actuator measurements is purely random, the
@@ -431,9 +458,9 @@ negative feedback. The controller is capable of predicting the measured joint
 torques with greater than 65\% VAF in all joints. Results and conclusions from
 a larger sample of subjects and conditions will be presented at the conference.
 
-%\section*{Acknowledgments}
-%
-%This research was funded by the Ohio's Wright Center for Sensor Systems
-%Engineering and the Parker Hannifin Corporation.
+\section*{Acknowledgments}
+
+This research was funded by the Ohio's Wright Center for Sensor Systems
+Engineering and the Parker Hannifin Corporation.
 
 \end{document}
