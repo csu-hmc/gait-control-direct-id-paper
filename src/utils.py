@@ -437,93 +437,186 @@ def load_sensors_and_controls():
     return Trial.sensors, Trial.controls
 
 
-def plot_joint_isolated_gains(sensor_labels, control_labels, gains,
-                              gains_variance, axes=None, show_std=True,
-                              linestyle='-'):
+def plot_joint_isolated_gains(sensors, actuators, gains, gains_std,
+                              mass=None, gait_cycle=None, axes=None,
+                              show_gain_std=True, linestyle='-'):
+    """Plots either a 3 x 3 or 2 x 3 subplot where the columns corresond
+    to a joint (ankle, knee, hip). The top show shows the proportional
+    gain plots and the bottom row shows the derivative gain plots. The
+    optional middle row plots the mean angle and angular rate.
 
-    print('Generating gain plot.')
+    Parameters
+    ==========
+    sensors : list of strings
+    actuators : list of strings
+    gains : ndarray
+    gains_std : ndarray
+    mass : float
+        If a mass is supplied the gains will be scaled by the mass.
+    gait_cycles : pandas.DataFrame
+        If gait cycles are supplied, a middle row with the mean gait cycles
+        will be plotted.
+    axes :
+    show_gain_std : boolean
+        If true, the standard deviation of the gains with respect to the
+        fit variance will be shown.
+    linestyle :
 
-    start = time.clock()
+    """
+
+    percent_of_gait_cycle = np.linspace(0.0, 1.0 - 1.0 / gains.shape[0],
+                                        num=gains.shape[0])
+
+    if mass is None:
+        unit_mod = ''
+    else:
+        gains /= mass
+        gains_std /= mass
+        unit_mod = '/kg'
+
+    if plt.rcParams['text.usetex']:
+        dot = r'$\cdot$'
+    else:
+        dot = r''
+
+    row_types = ['Angle', 'Rate']
+    units = ['Nm/rad{}'.format(unit_mod),
+             r'Nm {} s/rad{}'.format(dot, unit_mod)]
+
+    if gait_cycle is not None:
+        row_types.insert(1, 'Trajectory')
+        units.insert(1, None)
 
     if axes is None:
-        fig, axes = plt.subplots(3, 2, sharex=True)
+        fig, axes = plt.subplots(len(row_types), 3, sharex=True)
     else:
         fig = axes[0, 0].figure
 
-    for i, (row, sign) in enumerate(zip(['Ankle', 'Knee', 'Hip'],
-                                        ['PlantarFlexion', 'Flexion',
-                                         'Flexion'])):
-        for j, (col, unit) in enumerate(zip(['Angle', 'Rate'],
-                                            ['Nm/rad', r'Nm $\cdot$ s/rad'])):
+    def _get_gains():
+        row_label = '.'.join([side, col, sign, row])
+        col_label = '.'.join([side, col, sign + '.Moment'])
+
+        gain_row_idx = sensors.index(row_label)
+        gain_col_idx = actuators.index(col_label)
+
+        gains_per = gains[:, gain_col_idx, gain_row_idx]
+        sigma = gains_std[:, gain_col_idx, gain_row_idx]
+
+        return gains_per, sigma
+
+    def _shift_gains(gains_per, sigma, percent_of_gait_cycle):
+        # Shift that diggidty-dogg signal 50%
+        num_samples = len(percent_of_gait_cycle)
+
+        if num_samples % 2 == 0:  # even
+            first = percent_of_gait_cycle[:num_samples / 2] + 0.5
+            second = percent_of_gait_cycle[num_samples / 2:] - 0.5
+        else:  # odd
+            first = percent_of_gait_cycle[percent_of_gait_cycle < 0.5] + 0.5
+            second = percent_of_gait_cycle[percent_of_gait_cycle > 0.5] - 0.5
+
+        percent_of_gait_cycle = np.hstack((first, second))
+
+        # sort and sort gains/sigma same way
+        sort_idx = np.argsort(percent_of_gait_cycle)
+        percent_of_gait_cycle = percent_of_gait_cycle[sort_idx]
+        gains_per = gains_per[sort_idx]
+        sigma = sigma[sort_idx]
+
+        return gains_per, sigma, percent_of_gait_cycle
+
+    def _plot_gains():
+        if show_gain_std:
+            axes[i, j].fill_between(percent_of_gait_cycle,
+                                    gains_per - sigma,
+                                    gains_per + sigma,
+                                    alpha=0.5,
+                                    color=color)
+
+        axes[i, j].axhline(0.0, linestyle='-', color='black',
+                           label="_nolegend_")
+
+        axes[i, j].plot(percent_of_gait_cycle, gains_per, marker='o', ms=2,
+                        color=color, label=side, linestyle=linestyle)
+
+        if plt.rcParams['text.usetex']:
+            title_template = r"{}: {} $\rightarrow$ Moment"
+        else:
+            title_template = r"{}: {} -> Moment"
+
+        axes[i, j].set_title(title_template.format(col, row))
+
+        if j == 0:
+            axes[i, j].set_ylabel(unit)
+
+        if i == len(row_types) - 1:
+            if plt.rcParams['text.usetex']:
+                axes[i, j].set_xlabel(r'\% of Gait Cycle')
+            else:
+                axes[i, j].set_xlabel('% of Gait Cycle')
+            axes[i, j].xaxis.set_major_formatter(_percent_formatter)
+            axes[i, j].set_xlim(xlim)
+
+    def _plot_traj():
+        # TODO : Should I plot mean of right and shifted left?
+
+        angle_sensor = '.'.join([side, col, sign, 'Angle'])
+        rate_sensor = '.'.join([side, col, sign, 'Rate'])
+
+        if col == 'Ankle':
+            angle = gait_cycle[angle_sensor] + np.pi / 2.0
+        else:
+            angle = gait_cycle[angle_sensor]
+
+        axes[i, j].plot(gait_cycle.index.values.astype(float),
+                        angle, 'k-')
+
+        if j == 0:
+            axes[i, j].set_ylabel('rad')
+
+        rate_axis = axes[i, j].twinx()
+        rate_axis.plot(gait_cycle.index.values.astype(float),
+                       gait_cycle[rate_sensor], 'k:')
+        if j == 2:
+            rate_axis.set_ylabel('rad/s')
+
+        axes[i, j].set_title(r"Mean {} Joint Trajectories".format(col))
+        leg = axes[i, j].legend(('Angle',), loc=2,
+                                fancybox=True)
+        leg.get_frame().set_alpha(0.75)
+        leg = rate_axis.legend(('Rate',), loc=1,
+                                fancybox=True)
+        leg.get_frame().set_alpha(0.75)
+
+    xlim = (0.0, 1.0)
+
+    for i, (row, unit) in enumerate(zip(row_types, units)):
+
+        for j, (col, sign) in enumerate(
+            zip(['Ankle', 'Knee', 'Hip'],
+                ['PlantarFlexion', 'Flexion', 'Flexion'])):
+
             for side, marker, color in zip(['Right', 'Left'],
                                            ['o', 'o'],
                                            ['Blue', 'Red']):
 
-                row_label = '.'.join([side, row, sign + '.Moment'])
-                col_label = '.'.join([side, row, sign, col])
+                if row != 'Trajectory':
 
-                gain_row_idx = control_labels.index(row_label)
-                gain_col_idx = sensor_labels.index(col_label)
+                    gains_per, sigma = _get_gains()
 
-                gains_per = gains[:, gain_row_idx, gain_col_idx]
-                sigma = np.sqrt(gains_variance[:, gain_row_idx, gain_col_idx])
+                    if side == 'Left':
+                        gains_per, sigma, percent_of_gait_cycle = \
+                            _shift_gains(gains_per, sigma,
+                                         percent_of_gait_cycle)
 
-                percent_of_gait_cycle = np.linspace(0.0,
-                                                    1.0 - 1.0 / gains.shape[0],
-                                                    num=gains.shape[0])
+                    _plot_gains()
 
-                xlim = (0.0, 1.0)
+                elif row == 'Trajectory' and side == 'Right':
 
-                if side == 'Left':
-                    # Shift that diggidty-dogg signal 50%
-                    num_samples = len(percent_of_gait_cycle)
+                    _plot_traj()
 
-                    if num_samples % 2 == 0:  # even
-                        first = percent_of_gait_cycle[:num_samples / 2] + 0.5
-                        second = percent_of_gait_cycle[num_samples / 2:] - 0.5
-                    else:  # odd
-                        first = percent_of_gait_cycle[percent_of_gait_cycle < 0.5] + 0.5
-                        second = percent_of_gait_cycle[percent_of_gait_cycle > 0.5] - 0.5
-
-                    percent_of_gait_cycle = np.hstack((first, second))
-
-                    # sort and sort gains/sigma same way
-                    sort_idx = np.argsort(percent_of_gait_cycle)
-                    percent_of_gait_cycle = percent_of_gait_cycle[sort_idx]
-                    gains_per = gains_per[sort_idx]
-                    sigma = sigma[sort_idx]
-
-                if show_std:
-                    axes[i, j].fill_between(percent_of_gait_cycle,
-                                            gains_per - sigma,
-                                            gains_per + sigma,
-                                            alpha=0.5,
-                                            color=color)
-
-                axes[i, j].plot(percent_of_gait_cycle, gains_per,
-                                marker='o',
-                                ms=2,
-                                color=color,
-                                label=side,
-                                linestyle=linestyle)
-
-                #axes[i, j].set_title(' '.join(col_label.split('.')[1:]))
-                axes[i, j].set_title(r"{}: {} $\rightarrow$ Moment".format(row, col))
-
-                axes[i, j].set_ylabel(unit)
-
-                if i == 2:
-                    axes[i, j].set_xlabel(r'% of Gait Cycle')
-                    axes[i, j].xaxis.set_major_formatter(_percent_formatter)
-                    axes[i, j].set_xlim(xlim)
-
-    leg = axes[0, 0].legend(('Right', 'Left'), loc='best', fancybox=True,
-                            fontsize=8)
+    leg = axes[0, 0].legend(('Right', 'Left'), loc='best', fancybox=True)
     leg.get_frame().set_alpha(0.75)
-
-    print('{:1.2f} s'.format(time.clock() - start))
-
-    plt.tight_layout()
 
     return fig, axes
 
@@ -828,6 +921,8 @@ class Trial(object):
                 'Left.Ankle.PlantarFlexion.Moment',
                 'Left.Knee.Flexion.Moment',
                 'Left.Hip.Flexion.Moment']
+
+    actuators = controls
 
     # TODO : If num_cycle_samples is not 20 don't save the data to disk.
     num_cycle_samples = 20
@@ -1283,10 +1378,10 @@ class Trial(object):
     def plot_joint_isolated_gains(self, event, structure, axes=None,
                                   show_gain_std=True, linestyle='-',
                                   normalize=False, show_trajectories=True):
-        """Plots a 3 x 3 subplot where the columns corresond to a joint
-        (ankle, knee, hip). The top show shows the proportional gain plots
-        and the bottom row shows the derivative gain plots. The middle row
-        plots the mean angle and angular rate on a plotyy chart.
+        """Plots either a 3 x 3 or 2 x 3 subplot where the columns corresond
+        to a joint (ankle, knee, hip). The top show shows the proportional
+        gain plots and the bottom row shows the derivative gain plots. The
+        optional middle row plots the mean angle and angular rate.
 
         Parameters
         ==========
@@ -1301,157 +1396,30 @@ class Trial(object):
 
         """
 
-        # gains
-        # gain_var
-        # gait_cycles
-        # mass
-        # sensors and actuators
-
         gains = self.identification_results[event][structure][0].copy()
         gains_variance = self.identification_results[event][structure][3].copy()
         gains_std = np.sqrt(gains_variance)
 
-        percent_of_gait_cycle = np.linspace(0.0, 1.0 - 1.0 / gains.shape[0],
-                                            num=gains.shape[0])
-
         if normalize:
             mass, _ = self.subject_mass()
-            gains /= mass
-            gains_std /= mass
-            unit_mod = '/kg'
         else:
-            unit_mod = ''
-
-        if plt.rcParams['text.usetex']:
-            dot = r'$\cdot$'
-        else:
-            dot = r''
-
-        row_types = ['Angle', 'Rate']
-        units = ['Nm/rad{}'.format(unit_mod),
-                 r'Nm {} s/rad{}'.format(dot, unit_mod)]
+            mass = None
 
         if show_trajectories:
-
-            row_types.insert(1, 'Trajectory')
-            units.insert(1, None)
 
             if event == 'Normal Walking':
                 gait_cycles = self.merge_normal_walking()
             else:
                 gait_cycles, _ = self._remove_bad_gait_cycles(event)
 
-            mean_gait_cycles = gait_cycles.mean(axis='items')
+            mean_gait_cycle = gait_cycles.mean(axis='items')
 
-        if axes is None:
-            fig, axes = plt.subplots(len(row_types), 3, sharex=True)
-        else:
-            fig = axes[0, 0].figure
-
-        for i, (row, unit) in enumerate(zip(row_types, units)):
-
-            for j, (col, sign) in enumerate(
-                zip(['Ankle', 'Knee', 'Hip'],
-                    ['PlantarFlexion', 'Flexion', 'Flexion'])):
-
-                for side, marker, color in zip(['Right', 'Left'],
-                                               ['o', 'o'],
-                                               ['Blue', 'Red']):
-
-                    if row != 'Trajectory':
-                        row_label = '.'.join([side, col, sign, row])
-                        col_label = '.'.join([side, col, sign + '.Moment'])
-
-                        gain_row_idx = self.sensors.index(row_label)
-                        gain_col_idx = self.controls.index(col_label)
-
-                        gains_per = gains[:, gain_col_idx, gain_row_idx]
-                        sigma = gains_std[:, gain_col_idx, gain_row_idx]
-
-                        xlim = (0.0, 1.0)
-
-                        if side == 'Left':
-                            # Shift that diggidty-dogg signal 50%
-                            num_samples = len(percent_of_gait_cycle)
-
-                            if num_samples % 2 == 0:  # even
-                                first = percent_of_gait_cycle[:num_samples / 2] + 0.5
-                                second = percent_of_gait_cycle[num_samples / 2:] - 0.5
-                            else:  # odd
-                                first = percent_of_gait_cycle[percent_of_gait_cycle < 0.5] + 0.5
-                                second = percent_of_gait_cycle[percent_of_gait_cycle > 0.5] - 0.5
-
-                            percent_of_gait_cycle = np.hstack((first, second))
-
-                            # sort and sort gains/sigma same way
-                            sort_idx = np.argsort(percent_of_gait_cycle)
-                            percent_of_gait_cycle = percent_of_gait_cycle[sort_idx]
-                            gains_per = gains_per[sort_idx]
-                            sigma = sigma[sort_idx]
-
-                        if show_gain_std:
-                            axes[i, j].fill_between(percent_of_gait_cycle,
-                                                    gains_per - sigma,
-                                                    gains_per + sigma,
-                                                    alpha=0.5,
-                                                    color=color)
-
-                        axes[i, j].axhline(0.0, linestyle='-',
-                                           color='black', label="_nolegend_")
-
-                        axes[i, j].plot(percent_of_gait_cycle, gains_per,
-                                        marker='o',
-                                        ms=2,
-                                        color=color,
-                                        label=side,
-                                        linestyle=linestyle)
-
-                        if plt.rcParams['text.usetex']:
-                            title_template = r"{}: {} $\rightarrow$ Moment"
-                        else:
-                            title_template = r"{}: {} -> Moment"
-
-                        axes[i, j].set_title(title_template.format(col, row))
-
-                        if j == 0:
-                            axes[i, j].set_ylabel(unit)
-
-                        if i == len(row_types) - 1:
-                            if plt.rcParams['text.usetex']:
-                                axes[i, j].set_xlabel(r'\% of Gait Cycle')
-                            else:
-                                axes[i, j].set_xlabel('% of Gait Cycle')
-                            axes[i, j].xaxis.set_major_formatter(_percent_formatter)
-                            axes[i, j].set_xlim(xlim)
-
-                    elif row == 'Trajectory' and side == 'Right':
-                        # TODO : Should I plot mean of right and shifted left?
-                        angle_sensor = '.'.join([side, col, sign, 'Angle'])
-                        rate_sensor = '.'.join([side, col, sign, 'Rate'])
-                        if col == 'Ankle':
-                            angle = mean_gait_cycles[angle_sensor] + np.pi / 2.0
-                        else:
-                            angle = mean_gait_cycles[angle_sensor]
-                        axes[i, j].plot(mean_gait_cycles.index.values.astype(float),
-                                        angle, 'k-')
-                        if j == 0:
-                            axes[i, j].set_ylabel('rad')
-                        rate_axis = axes[i, j].twinx()
-                        rate_axis.plot(mean_gait_cycles.index.values.astype(float),
-                                       mean_gait_cycles[rate_sensor], 'k:')
-                        if j == 2:
-                            rate_axis.set_ylabel('rad/s')
-                        axes[i, j].set_title(r"Mean {} Joint Trajectories".format(col))
-                        leg = axes[i, j].legend(('Angle',), loc=2,
-                                                fancybox=True)
-                        leg.get_frame().set_alpha(0.75)
-                        leg = rate_axis.legend(('Rate',), loc=1,
-                                               fancybox=True)
-                        leg.get_frame().set_alpha(0.75)
-
-        leg = axes[0, 0].legend(('Right', 'Left'), loc='best', fancybox=True)
-        leg.get_frame().set_alpha(0.75)
-
+        fig, axes = plot_joint_isolated_gains(self.sensors, self.actuators,
+                                              gains, gains_std, mass=mass,
+                                              gait_cycle=mean_gait_cycle,
+                                              axes=axes,
+                                              show_gain_std=show_gain_std,
+                                              linestyle=linestyle)
         return fig, axes
 
     @time_function
