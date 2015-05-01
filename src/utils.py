@@ -22,6 +22,9 @@ from gait_landmark_settings import settings
 
 warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
 
+RIGHT_COLOR = 'blue'
+LEFT_COLOR = 'red'
+
 
 def mkdir(directory):
     """Creates a directory if it does not exist, otherwise it does nothing.
@@ -1495,3 +1498,37 @@ class Trial(object):
         axes[-1, 1].set_xlabel('Time [s]')
 
         return fig, axes
+
+
+def plot_gait_man(gait_cycle, axis=None):
+
+    num_samples = gait_cycle.shape[0]
+
+    percent_of_gait_cycle = np.linspace(0.0, 1.0 - 1.0 / num_samples,
+                                        num=num_samples)
+
+    fig, axis = plt.subplots()
+
+    left, right, _, _ = motek.markers_for_2D_inverse_dynamics()
+
+    for i in range(len(gait_cycle)):
+
+        x = gait_cycle[right[::2]].iloc[i]
+        # This will equally space the images 1.0 meter apart.
+        x_adj = -x.mean() + i * 1.0
+        x = x + x_adj
+        y = gait_cycle[right[1::2]].iloc[i]
+
+        axis.plot(x, y, color=LEFT_COLOR)
+
+        x = gait_cycle[left[::2]].iloc[i]
+        x = x + x_adj
+        y = gait_cycle[left[1::2]].iloc[i]
+
+        axis.plot(x, y, color=RIGHT_COLOR)
+
+    plt.axis('equal')
+
+    plt.xlim((0.0, num_samples * 1.0))
+
+    return fig, axis
