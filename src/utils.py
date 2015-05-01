@@ -601,7 +601,7 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std,
 
             for side, marker, color in zip(['Right', 'Left'],
                                            ['o', 'o'],
-                                           ['Blue', 'Red']):
+                                           [RIGHT_COLOR, LEFT_COLOR]):
 
                 if row != 'Trajectory':
 
@@ -1507,28 +1507,37 @@ def plot_gait_man(gait_cycle, axis=None):
     percent_of_gait_cycle = np.linspace(0.0, 1.0 - 1.0 / num_samples,
                                         num=num_samples)
 
-    fig, axis = plt.subplots()
+    if axis is None:
+        fig, axis = plt.subplots()
+    else:
+        fig = axis.figure
 
     left, right, _, _ = motek.markers_for_2D_inverse_dynamics()
+
+    ticks = []
 
     for i in range(len(gait_cycle)):
 
         x = gait_cycle[right[::2]].iloc[i]
         # This will equally space the images 1.0 meter apart.
-        x_adj = -x.mean() + i * 1.0
+        x_adj = -x.mean() + i * 0.75
+        ticks.append(x_adj)
         x = x + x_adj
         y = gait_cycle[right[1::2]].iloc[i]
 
-        axis.plot(x, y, color=LEFT_COLOR)
+        axis.plot(x, y, color=RIGHT_COLOR)
 
         x = gait_cycle[left[::2]].iloc[i]
         x = x + x_adj
         y = gait_cycle[left[1::2]].iloc[i]
 
-        axis.plot(x, y, color=RIGHT_COLOR)
+        axis.plot(x, y, color=LEFT_COLOR)
 
-    plt.axis('equal')
+    axis.set_aspect('equal')
+    axis.autoscale(tight=True)
 
-    plt.xlim((0.0, num_samples * 1.0))
+    axis.set_xticks(ticks)
+    axis.set_xticklabels(['{:1.0%}'.format(val) for val in
+                          percent_of_gait_cycle])
 
     return fig, axis
