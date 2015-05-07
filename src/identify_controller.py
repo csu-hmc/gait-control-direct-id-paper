@@ -16,7 +16,7 @@ from gait_landmark_settings import settings
 PATHS = utils.config_paths()
 
 
-def main(event, structure, recompute):
+def main(event, structure, recompute, normalize):
 
     trial_numbers = sorted(settings.keys())
 
@@ -41,7 +41,8 @@ def main(event, structure, recompute):
 
         trial.identify_controller(event, structure)
 
-        fig, axes = trial.plot_joint_isolated_gains(event, structure)
+        fig, axes = trial.plot_joint_isolated_gains(event, structure,
+                                                    normalize=normalize)
 
         solver = trial.control_solvers[event][structure]
         id_num_steps = solver.identification_data.shape[0]
@@ -90,6 +91,9 @@ if __name__ == "__main__":
     msg = ("Force recomputation of all data.")
     parser.add_argument('-r', '--recompute', action="store_true", help=msg)
 
+    msg = ("Normalize gains to subject mass in plots.")
+    parser.add_argument('-n', '--normalize', action="store_true", help=msg)
+
     args = parser.parse_args()
 
-    main(args.event, args.structure, args.recompute)
+    main(args.event, args.structure, args.recompute, args.normalize)
