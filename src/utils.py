@@ -1467,7 +1467,7 @@ class Trial(object):
                     est_y.append(step[m].values)
 
                 axes[i, j].plot(np.hstack(est_x), np.hstack(est_y), # '.',
-                                color='blue')
+                                color=RIGHT_COLOR if side == 'Right' else LEFT_COLOR)
 
                 if plt.rcParams['text.usetex']:
                     est_lab = r'Estimated [{:1.1f}\%]'.format(100.0 * vafs[m])
