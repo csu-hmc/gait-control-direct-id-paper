@@ -23,7 +23,7 @@ structure = 'joint isolated'
 trial = utils.Trial(trial_number)
 _, marker_list, _ = trial._2d_inverse_dyn_input_labels()
 
-for scale in np.linspace(0.001, 0.05, num=10):
+for scale in np.linspace(0.0, 0.02, num=11):
 
     trial.remove_precomputed_data()
 
@@ -33,8 +33,9 @@ for scale in np.linspace(0.001, 0.05, num=10):
 
     shape = event_data[marker_list].shape
 
-    trial.event_data_frames[event][marker_list] += \
-        np.random.normal(scale=scale, size=shape)
+    if scale > 0.00001:
+        trial.event_data_frames[event][marker_list] += \
+            np.random.normal(scale=scale, size=shape)
 
     trial._write_inverse_dynamics_to_disk(event)
     trial._section_into_gait_cycles(event)
@@ -56,7 +57,7 @@ for scale in np.linspace(0.001, 0.05, num=10):
 
     title = """\
 {} Scheduled Gains Identified from {} Gait Cycles in Trial {}
-Nominal Speed: {} m/s, Gender: {}, Variation Scaling: {}
+Nominal Speed: {} m/s, Gender: {}, Variation Scaling: {:1.4f}
 """
 
     fig.suptitle(title.format(structure.capitalize(), id_num_cycles,
