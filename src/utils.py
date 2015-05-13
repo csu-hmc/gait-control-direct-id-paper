@@ -1036,12 +1036,19 @@ class Trial(object):
 
         self.event_data_frames[event] = event_data_frame
 
-    def _generate_artificial_data(self, num_cycles=400):
+    def _2d_inverse_dyn_input_labels(self):
 
         m_set = self.meta_data['trial']['marker-set']
         measurements = motek.markers_for_2D_inverse_dynamics(m_set)
         measurement_list = reduce(operator.add, measurements)
         marker_list = reduce(operator.add, measurements[:2])
+        load_list = reduce(operator.add, measurements[2:])
+
+        return measurement_list, marker_list, load_list
+
+    def _generate_artificial_data(self, num_cycles=400):
+
+        measurement_list, marker_list, _ = self._2d_inverse_dyn_input_labels()
 
         base_event = 'First Normal Walking'
         if base_event not in self.event_data_frames:
