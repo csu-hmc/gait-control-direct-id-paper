@@ -66,28 +66,52 @@ feedback controller for a similar system.
 
 It is difficult to design a controller from first principles
 for this very non-linear system. Although work based on \cite{Geyer2010} are
-giving promising results in simulated musculoskeletal systems \cite{Wang2010,
-Geitenbeek2014}. Even though constraining the controller to rudimentary models
+giving promising results in simulated musculoskeletal systems \cite{Wang2012,
+Geitenbeek2013}. Even though constraining the controller to rudimentary models
 of the muscoulo skeleteal system is fruitful, we are curious if more generic
 black box control models can reveal more robust controllers. To improve the
 gait of powered prosthetics, our intent is to identify a simple, linear
 controller from a large set of data collected from able-bodied subjects being
 perturbed by random longitudinal forces.
 
-There are other researchers thinking along these lines. Elliot Rouse identified
-the parameters of a linear model of the ankle's passive and active stiffness
-and damping by perturbing around 400 stance phases of the gait cycle and
-fitting a model with linear least squares. \cite{Wang2013} are able to predict
-foot placement with a simple linear model derived from kinematic data that
-relates the mid-stance pelvic state with the following foot location. Neither
-of these explicitly tease out the feedback mechanism.
+\cite{Sup2008} proposed a finite state proportional derivative feed back
+controller for a powered transfemoral prosthesis. The control law that
+generates the desired joint torques is based on three constants and a desired
+angle set point for each of the four modes of a gait cycle. They found the
+values of the controller by fitting their controller to normative joint angle,
+angular rate, and torque estimates from a single gait cylce from an able bodied
+walker. This method is very unliekly to actually identify a true controller due
+to the inherent errors shown in \cite{Rouse2013} but may have merit as
+\cite{Rouse2014} found quasi-stiffness to be equivalent to stiffness. The
+authors ended up hand tuning their ontroller based on user feel leaving them
+with a controller that was less than data driven.
 
-We answer this question by collecting greater than 15,000 gait cycles from 11
-subjects walking at three nominal speeds on an instrumented treadmill where we
-measure the kinematics of a full body marker set and a full set of ground
-reaction loads at each foot while perturbing the subject by varying the belt
-speed. We then identify a gait phase gain scheduled non-linear controller with
-the direct identification method~\cite{Ljung1999}.
+Elliot Rouse's \cite{Rousse2014} work is most similar to ours. They identified
+the parameters of a linear mass-spring-damper model of the lumped ankle's
+passive and active by perturbing at four points in the stance phase of the gait
+cycle.  He does not explicitly claim that their model is a controller, opting
+to call it modulated impedance instead. Rouse et al. carefully isolate the
+change in joint angle and torque due to the perturbation and derive there model
+parameters to avoid the issues discussed in \cite{Rouse2013}. He shows a linear
+relationship for stiffness with resoect to 20-70\% phase.
+
+More recently \cite{Wang2014} uses a simpler approach and is able to predict
+foot placement with a simple linear model derived from kinematic data that
+relates the mid-stance pelvic state to the following foot location. This is
+questionble though, as there is no way to show that this is a control mechanism
+and not simply a mechanical relationship. This analsyse was performed without
+external perturbatiosn suggesting that the walker self-perturbs enough to glean
+results.
+
+We approach this ``control'' identification problem in a similar fashion as
+\cite{Rouse2014} but by making use of a much richer data set that has the
+potetional to expose MIMO control mechanisms. We collect greater than 15,000
+gait cycles from 11 subjects walking at three nominal speeds on an instrumented
+treadmill where we measure the kinematics of a full body marker set and a full
+set of ground reaction loads at each foot while perturbing the subject by
+varying the belt speed with Gaussian noise. We then identify a gait phase gain
+scheduled non-linear controller with the so called direct identification
+method~\cite{Ljung1999}.
 
 \section*{Methods}
 %
@@ -495,5 +519,8 @@ a larger sample of subjects and conditions will be presented at the conference.
 
 This research was funded by the Ohio's Wright Center for Sensor Systems
 Engineering.
+
+\bibliographystyle{plain}
+\bibliography{references}
 
 \end{document}
