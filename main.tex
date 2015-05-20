@@ -28,8 +28,6 @@
 \author{Jason K. Moore and Antonie van den Bogert}
 
 \title{Direct Control Identification in Human Gait}
-\title{Directly Identified Gait Phase Scheduled Feedback Gains Exhibit Positive
-  and Negative Feedback}
 
 \date{}
 
@@ -51,28 +49,37 @@ Recent research and commercial activity indicate that gait-related powered
 prosthetics will play an important role in both assisting humans with
 disabilities and enhancing the abilities of the able bodied. These devices
 include a variety of sensors and actuators than can be coupled to a control
-system to provide acutated gait assistance. However, for example, the available
+system to provide assisted gait. There are currently commericial version of
+powered trasnfemoral leg prostheses \cite{BiOM} and lower extremity exoskeleton
+\cite{ReWalk} and many products still in the research phase
+\cite{Ekso,Parker,Goldfarb,etc} that hope to increase the mobility of the
+disabled. As promising as these devices are the available
 lightweight lower extremity exoskeletons lack gait that resembles an
 able-bodied human both in terms of stability and ``natural'' gait motions.
 
-Given a ``human-like'' system, i.e. one with similar degrees of freedom and
-inertial properties to a human, that is actuated with simple joint torques can
-we identify a feedback control mechanism for this system that causes it to
-walk stably and recover from perturbations in much the same way a human does?
-
-We hypothesize that typical gait measurements taken while a person is
-walking under the influence of perturbations can be used to identify a
-feedback controller for a similar system.
-
-It is difficult to design a controller from first principles
-for this very non-linear system. Although work based on \cite{Geyer2010} are
+Due to the highly non-linear plant robust control is difficult to come by from
+first principles for these devices. Although work based on \cite{Geyer2010} are
 giving promising results in simulated musculoskeletal systems \cite{Wang2012,
-Geitenbeek2013}. Even though constraining the controller to rudimentary models
-of the muscoulo skeleteal system is fruitful, we are curious if more generic
-black box control models can reveal more robust controllers. To improve the
-gait of powered prosthetics, our intent is to identify a simple, linear
-controller from a large set of data collected from able-bodied subjects being
-perturbed by random longitudinal forces.
+Geitenbeek2013} these controllers still only produce marginally stable
+simulations.
+
+Even though constraining the controller to rudimentary models of the musculo
+skeleteal system is fruitful, we are curious if more generic control structures
+can reveal more robust controllers. To improve the gait of powered prosthetics,
+our intent is to identify a simple, linear controller from a large set of data
+collected from able-bodied subjects being perturbed by random longitudinal
+forces.
+
+We pose our problem as such: given a ``human-like'' plant, i.e. one with
+similar degrees of freedom and inertial properties to a human, that is actuated
+with simple joint torques can we identify a feedback control mechanism for this
+system that causes it to walk stably and recover from perturbations in much the
+same way a human does?
+
+We hypothesize that typical gait measurements taken while a person is walking
+under the influence of perturbations can be used to identify a generic and
+potentially robust feedback controller for simulated or robotic system. Other
+researchers are also pursing this path.
 
 \cite{Sup2008} proposed a finite state proportional derivative feed back
 controller for a powered transfemoral prosthesis. The control law that
@@ -80,20 +87,22 @@ generates the desired joint torques is based on three constants and a desired
 angle set point for each of the four modes of a gait cycle. They found the
 values of the controller by fitting their controller to normative joint angle,
 angular rate, and torque estimates from a single gait cylce from an able bodied
-walker. This method is very unliekly to actually identify a true controller due
-to the inherent errors shown in \cite{Rouse2013} but may have merit as
+walker. This method is unlikely to actually identify a true controller due
+to the inherent errors expounded by \cite{Rouse2013} but may have merit as
 \cite{Rouse2014} found quasi-stiffness to be equivalent to stiffness. The
 authors ended up hand tuning their ontroller based on user feel leaving them
 with a controller that was less than data driven.
 
+\todo[inline]{Add in a description of Hugh Herr's BiOM controller}
+
 Elliot Rouse's \cite{Rousse2014} work is most similar to ours. They identified
 the parameters of a linear mass-spring-damper model of the lumped ankle's
-passive and active by perturbing at four points in the stance phase of the gait
-cycle.  He does not explicitly claim that their model is a controller, opting
+passive and active impedance by perturbing at four points in the stance phase of the gait
+cycle. He does not explicitly claim that their model is a controller, opting
 to call it modulated impedance instead. Rouse et al. carefully isolate the
-change in joint angle and torque due to the perturbation and derive there model
+change in joint angle and torque due to the perturbation and derive their model
 parameters to avoid the issues discussed in \cite{Rouse2013}. He shows a linear
-relationship for stiffness with resoect to 20-70\% phase.
+relationship for stiffness with respect to 20-70\% phase.
 
 More recently \cite{Wang2014} uses a simpler approach and is able to predict
 foot placement with a simple linear model derived from kinematic data that
@@ -105,24 +114,25 @@ results.
 
 We approach this ``control'' identification problem in a similar fashion as
 \cite{Rouse2014} but by making use of a much richer data set that has the
-potetional to expose MIMO control mechanisms. We collect greater than 15,000
-gait cycles from 11 subjects walking at three nominal speeds on an instrumented
-treadmill where we measure the kinematics of a full body marker set and a full
-set of ground reaction loads at each foot while perturbing the subject by
-varying the belt speed with Gaussian noise. We then identify a gait phase gain
-scheduled non-linear controller with the so called direct identification
-method~\cite{Ljung1999}.
+potetional to expose multi-input multi-ouput control mechanisms for the entire
+body. We collect greater than 15,000 gait cycles from 11 subjects walking at
+three nominal speeds on an instrumented treadmill where we measure the
+kinematics of a full body marker set and a full set of ground reaction loads at
+each foot while perturbing the subject by varying the belt speed with
+Gaussian-like noise. We then identify a gait phase gain scheduled non-linear
+controller with the so called direct identification method~\cite{Ljung1999}.
 
 \section*{Methods}
 %
 \subsection*{Experiments}
 %
-We make use of a subset of the gait data reported in \cite{Moore2015} and refer
-the reader to that publication for the details about the experiments and data.
-The subset of the data includes a large number of gait cycles for 11 subjects
-subjects walking at three nominal speeds on a treadmill with and without
-pseudo-random longitudinal perturbations, i.e fluctuations in the belt speed.
-The subject metadata parameters are given in Table~\ref{tab:subjects}.
+The data includes a large number of gait cycles (> 19000) for 11 subjects
+subjects walking at three nominal speeds,
+\SIlist{0.8;1.2;1.6}{\meter\per\second}, on a treadmill with and without
+pseudo-random longitudinal perturbations in the belt speed.
+The data is a subset of the data reported in \cite{Moore2015} and we refer the
+reader to that publication for the details about the experimental protocol and
+data. The subject metadata parameters are given in Table~\ref{tab:subjects}.
 %
 \begin{table}
   \cprotect\caption{Information about the 11 study participants. The final
@@ -150,7 +160,8 @@ GaitAnalysisToolKit, to process the data. The processing follows these steps:
   \item Section the trials into unperturbed and perturbed sections based on the
     event times.
   \item Compute the planar inverse dynamics for the lower body: right and left
-    ankle, knee, hip joint angles, joint angular rates, and joint torques.
+    ankle, knee, hip joint angles, joint angular rates, and joint torques
+    \cite{Winter2009}.
   \item Identify the heelstrike times based on the vertical ground reaction
     force.
   \item Segment the time series into gait cycles based on the right foot's
@@ -162,14 +173,15 @@ GaitAnalysisToolKit, to process the data. The processing follows these steps:
 \end{enumerate}
 
 After the initial processing above, the data is stored in three dimensional
-arrays M x N x (q + p), where M is the number of gait cycles, N is the number of time
-instances in the gait cycle, and (q + p) are the number of measurements.
-Figure~\ref{fig:angle-torque-comparison} shows the mean and standard deviation
-of across the gait cycles for selected time series for both unperturbed and
-perturbed walking. Furthermore, Figure~\ref{fig:gait-cycle-stats-comparison}
-compares several gait statistics of interest for unperturbed and perturbed
-walking. These two figures are intended to show that there is variation in the
-subject's motion that is a direct result of the longitudinal perturbations.
+arrays for each phase of the trial M x N x (q + p), where M is the number of
+gait cycles, N is the number of phase instances in the gait cycle, and (q + p)
+are the number of measurements. Figure~\ref{fig:angle-torque-comparison} shows
+the mean and standard deviation of across the gait cycles for selected time
+series for both unperturbed and perturbed walking. Furthermore,
+Figure~\ref{fig:gait-cycle-stats-comparison} compares several gait statistics
+of interest for unperturbed and perturbed walking. These two figures are
+intended to show that there is variation in the subject's motion that is a
+direct result of the longitudinal perturbations.
 %
 \begin{figure}
   \centering
@@ -236,7 +248,8 @@ described by the following algebraic equation.
 
 It is important to note that this control structure will effectively lump the
 passive control gains with the active ones in addition to any other unmodeled
-effects. This is desirable for our intentions, as we are only concerned with
+effects. Other authors refer to these gains as the impedance stiffness and
+damping. This is desirable for our intentions, as we are only concerned with
 mapping this identified controller to that of powered prosthetic device and it
 is thuse unnessary to distinguish between these.
 
@@ -304,8 +317,8 @@ validation data set to gauage how well the model predicts.
 The formulation above allows one to choose a variety of combinations of
 potential sensor, $\mathbf{s}(t)$, and actuator, $\mathbf{m}(t)$, signals to
 generate a controller. For this analyses, we assume we are constructing a
-controller for a planar system that only involves the hip, knee, and ankle
-joints of each leg. We choose the angle and angular rate of each joint are as
+controller for a planar plant that only involves the hip, knee, and ankle
+joints of each leg. We choose the angle and angular rate of each joint as
 sensors and a torque at each joint are as the actuators.
 
 The most general case for the controller, $\K$, has $q \times p$ unknown
@@ -324,6 +337,25 @@ control that isolate actuators from sensors. We explore four possibilities:
     the mean torques?}
 \end{description}
 
+%
+% - 11 different subjects
+% - qxp different mass normalized gains
+% - n different points in the gait cycle
+% - 3 different speeds
+% - 2 genders
+% - unpeturbed and perturbed
+% - right and left sides
+%
+% - Are the mean subject gains at each speed significantly different than zero
+%   at each phase point?
+% - Are the stds wrt to subject in one speed large or small?
+% - Do the mean subject gains at each speed vary wrt respect to gait phase
+%   points?
+% - Do the mean subject gains vary with respect to speed at each gait phase
+%   point?
+% - Are the mean subject gains significantly different between right and left
+%   legs?
+
 \subsection*{Example Result}
 %
 Once a controller is identified from a selection of gait cycles from a trial
@@ -332,8 +364,8 @@ how well the model can predict the acutation of indepedent validation data. The
 actual gain values may give some insight to the physiological nature of the
 feedback mechanism. Here we present a typical result from a join isolated
 controller structure. Figure~\ref{fig:example-gains} shows the estimates of the
-scheduled gains with respect to the percent gait cycle in each leg as a
-function of the phase of the gait cycle.
+mass normalized scheduled gains with respect to the percent gait cycle in each
+leg as a function of the phase of the gait cycle.
 %
 \begin{figure}
   \centering
@@ -345,7 +377,7 @@ function of the phase of the gait cycle.
     measurements, and the final row shows the derivative gains. The columns
     correspond to the three joints for each leg. The shaded area bounding the
     gains gives the standard deviation of the parameters with respect to the
-    fit variance. Gains values greater than zero indicate negative feedback and
+    fit variance. Gain values greater than zero indicate negative feedback and
     gains below zero indicate positive feedback.}
   \label{fig:example-gains}
 \end{figure}
@@ -368,12 +400,12 @@ i.e. more like 100-120 samples per cycle.}
       dynamics. The sensor and actuator estimations are taken from independent
       gait cycles from the same trial. The variance accounted for, VAF, is
       reported for all of the validation gait cycles period whereas only a select
-      number of gait cycles are shown. }
+      number of gait cycles are shown.}
     \label{fig:example-fit}
   \end{center}
 \end{figure}
 
-\subsection*{Gains are consistent across subjects}
+\subsection*{Inter subject mean}
 %
 We compute the body mass normalized gains, $\frac{\mathbf{K}(\varphi)}{m}$ for
 each subject at each nominal speed and examine the mean and standard deviation
@@ -392,14 +424,36 @@ gains identified from a joint isolated control structure at the
   \end{center}
 \end{figure}
 
-The gains exhibit similar patterns, albeit with relatively large standard
-deviations, across subjects.
+
+\subsection{Speed variation}
+%
+\section*{Discussion}
+%
+Figure~\ref{fig:example-gains} shows that there are patterns that are
+significantly different than zero in portions of the gait phase for each gain.
+
+\todo[inline]{How do I show that the gains are significantly different than
+  zero?}
+
+\subsection*{Gains are consistent across subjects}
+%
+Figure~\ref{fig:mean-gains1-2} indicates that the gains exhibit similar
+patterns across subjects. There is substantial variability at some points in
+the gait cycle. The variability is higher in 40\% to 50\%. \cite{Rouse2014}
+found high intersubject variability in the ankle model parameters during the
+stance phase.
+
+\todo[inline]{Should I somehow check whether the subjects are significantly
+  different from one another? i.e. check whether each subject is significantly
+  different than the mean. Would it be useful to compute the coefficien to of
+  variation (std/mean)? This could blow up for values around zero.}
 
 \subsection*{No feedback in the swing phase}
 %
-During the swing phase of each leg the gains are essentially zero for all but
-the hip gains. This indicates that swing leg ankle and knee may not be utilized
-to react from the perturbations orginating in the stance leg.
+During the swing phase of each leg the gains are not significantly different
+than zero for the ankle and knee gains. This indicates that swing leg ankle and
+knee may not be utilized in a feedback fashion to react from the perturbations
+orginating in the stance leg.
 
 \todo[inline]{It would be nice to plot the mean toe off time on the gain plots
   to delineate the stance and swing phase. In addition I could add the gait man
@@ -410,6 +464,9 @@ to react from the perturbations orginating in the stance leg.
 The gait data was split into gait cycles with respect to the right leg's
 heelstrikes. The gains identified from the right delineated gait cycles exhibit
 anatomical symmetry with respect to the right and left legs.
+
+\todo[inline]{It is probably possible to compute whethter the right is
+significantly different than the left.}
 
 \subsection*{Directly Identified Gait Phase Scheduled Feedback Gains Exhibit
   Positive and Negative Feedback}
@@ -506,7 +563,7 @@ This means that either that there is enough feedback variation in normal
 walking to identify the controller or that are not identifying anything that is
 significant.
 
-\section*{Discussion}
+\section*{Conclusion}
 %
 We are able to identify a simple linear controller that exhibits larger gains
 in the stance phase than in the swing phase. Additionally, similar gain
