@@ -710,6 +710,88 @@ def plot_validation(estimated_controls, continuous, vafs):
     return fig, axes
 
 
+def gain_data_frame(trial_numbers, structure, scale_by_mass=True):
+    """Returns a data frame containing all of the gains and several
+    independent variables.
+
+    Parameters
+    ==========
+    trial_numbers : list of strings
+        The trial numbers that should be included in the data frame. Each
+        row in the DataFrame represents the results of a trial.
+    structure : string
+        The control structure.
+    scale_by_mass : boolean, optional, default=True
+        If true the gains will be scaled by the subject's mass.
+
+    """
+
+    data_dir = config_paths()['processed_data_dir']
+
+    sub_tab_path = os.path.join(data_dir, 'subject_table.h5')
+    mass_tab = pd.read_hdf(sub_tab_path, 'subject_table')
+
+    # index: trial id
+    # columns: nominal speed, perturbed/unperturbed, subject id,
+    # gains
+
+    all_gains = np.zeros((2 * len(trial_numbers), Trial.num_cycle_samples *
+                          len(Trial.controls) * len(Trial.sensors)))
+
+    # column names for gains: k-q-p-n
+    # n: 0-19
+
+    gain_column_names = ['k_{}_{}_{}'.format(i, j, k)
+                         for i in range(Trial.num_cycle_samples)
+                         for j in range(len(Trial.controls))
+                         for k in range(len(Trial.sensors))]
+
+    cat_data = defaultdict(list)
+
+    file_name_template = '{}-{}.npz'
+
+    for i, trial_number in enumerate(trial_numbers):
+
+        trial = Trial(trial_number)
+
+        trial_id = trial.meta_data['trial']['id']
+        subject_id = trial.meta_data['subject']['id']
+        nominal_speed = trial.meta_data['trial']['nominal-speed']
+
+        cat_data['trial_id'].append(trial_id)
+        cat_data['trial_id'].append(trial_id)
+        cat_data['nominal_speed'].append(nominal_speed)
+        cat_data['nominal_speed'].append(nominal_speed)
+        cat_data['subject_id'].append(subject_id)
+        cat_data['subject_id'].append(subject_id)
+
+        mass = mass_tab['Measured Mass'].loc[subject_id]
+
+        for j, event in enumerate(['longitudinal-perturbation',
+                                   'normal-walking']):
+
+            cat_data['event'].append(event)
+
+            file_name = file_name_template.format(trial_number, event)
+            gain_data_npz_path = os.path.join(data_dir, 'gains',
+                                              '-'.join(structure.split(' ')),
+                                              file_name)
+
+            with np.load(gain_data_npz_path) as npz:
+                # n, q, p
+                if scale_by_mass:
+                    all_gains[2 * i + j] = (npz['arr_0'] / mass).flatten()
+                else:
+                    all_gains[2 * i + j] = (npz['arr_0']).flatten()
+
+    df = pd.DataFrame(all_gains, columns=gain_column_names)
+
+    for k, v in cat_data.items():
+        df[k] = v
+
+    return df
+
+
 def mean_gains(trial_numbers, sensors, controls, num_gains, event,
                structure, scale_by_mass=False):
     """
