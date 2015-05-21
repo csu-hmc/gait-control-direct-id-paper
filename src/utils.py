@@ -9,6 +9,7 @@ import operator
 
 # external libs
 import numpy as np
+import scipy as sp
 import matplotlib.pyplot as plt
 import pandas as pd
 import tables
@@ -442,7 +443,7 @@ def load_sensors_and_controls():
 
 def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
                               mass=None, gait_cycle=None, axes=None,
-                              linestyle='-'):
+                              linestyle='-', mark=None):
     """Plots either a 3 x 3 or 2 x 3 subplot where the columns corresond to
     a joint (ankle, knee, hip). The top show shows the proportional gain
     plots and the bottom row shows the derivative gain plots. The optional
@@ -467,6 +468,9 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
         An axes to plot to.
     linestyle : string, optional, default='-'
         Valid matplotlib linestyles.
+    mark : ndarray, shape(n, p, q),  optional, default=None
+        A boolean array indicating True for gains that should show a marker
+        and false for gains that shouldn't.
 
     Returns
     =======
@@ -484,6 +488,12 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
         show_std = False
     else:
         show_std = True
+
+    if mark is None:
+        markevery = None
+        mark = np.zeros_like(gains, dtype=bool)
+    else:
+        markevery = 'something'
 
     if mass is None:
         unit_mod = ''
@@ -519,10 +529,11 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
 
         gains_per = gains[:, gain_col_idx, gain_row_idx]
         sigma = gains_std[:, gain_col_idx, gain_row_idx]
+        mark_per = mark[:, gain_col_idx, gain_row_idx]
 
-        return gains_per, sigma
+        return gains_per, sigma, mark_per
 
-    def _shift_gains(gains_per, sigma, percent_of_gait_cycle):
+    def _shift_gains(gains_per, sigma, mark, percent_of_gait_cycle):
         # Shift that diggidty-dogg signal 50%
         num_samples = len(percent_of_gait_cycle)
 
@@ -540,10 +551,11 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
         percent_of_gait_cycle = percent_of_gait_cycle[sort_idx]
         gains_per = gains_per[sort_idx]
         sigma = sigma[sort_idx]
+        mark_per = mark[sort_idx]
 
-        return gains_per, sigma, percent_of_gait_cycle
+        return gains_per, sigma, mark_per, percent_of_gait_cycle
 
-    def _plot_gains():
+    def _plot_gains(markevery):
         if show_std:
             axes[i, j].fill_between(percent_of_gait_cycle,
                                     gains_per - sigma,
@@ -554,8 +566,9 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
         axes[i, j].axhline(0.0, linestyle='-', color='black',
                            label="_nolegend_")
 
-        axes[i, j].plot(percent_of_gait_cycle, gains_per, marker='o', ms=2,
-                        color=color, label=side, linestyle=linestyle)
+        axes[i, j].plot(percent_of_gait_cycle, gains_per, marker='o', ms=4,
+                        color=color, label=side, linestyle=linestyle,
+                        markevery=markevery)
 
         if plt.rcParams['text.usetex']:
             title_template = r"{}: {} $\rightarrow$ Moment"
@@ -620,14 +633,17 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
 
                 if row != 'Trajectory':
 
-                    gains_per, sigma = _get_gains()
+                    gains_per, sigma, mark_per = _get_gains()
+
+                    if markevery is not None:
+                        markevery, = np.nonzero(mark_per)
 
                     if side == 'Left':
-                        gains_per, sigma, percent_of_gait_cycle = \
-                            _shift_gains(gains_per, sigma,
+                        gains_per, sigma, mark_per, percent_of_gait_cycle = \
+                            _shift_gains(gains_per, sigma, mark_per,
                                          percent_of_gait_cycle)
 
-                    _plot_gains()
+                    _plot_gains(markevery)
 
                 elif row == 'Trajectory' and side == 'Right':
 
@@ -753,7 +769,7 @@ def gain_data_frame(trial_numbers, structure, scale_by_mass=True):
     all_gains = np.zeros((2 * len(trial_numbers), Trial.num_cycle_samples *
                           len(Trial.controls) * len(Trial.sensors)))
 
-    # column names for gains: k-q-p-n
+    # column names for gains: k_n_q_p
     # n: 0-19
 
     gain_column_names = ['k_{}_{}_{}'.format(i, j, k)
@@ -805,6 +821,82 @@ def gain_data_frame(trial_numbers, structure, scale_by_mass=True):
         df[k] = v
 
     return df
+
+
+def mark_if_sig_diff_than(gain_group, mu=0.0):
+    """Returns an array indicating if the mean gains are significantly
+    different than mu.
+
+    Parameters
+    ==========
+    gain_group : ndarray, shape(r, n, q, p)
+        The scheduled gains for r trials.
+    mu : float, optional, default=0.0
+        The value to compare the mean gains against.
+
+    """
+
+    # compute the p val for each t val
+    t, p = sp.stats.ttest_1samp(gain_group, mu, axis=0)
+
+    markers = np.zeros((gain_group.shape[1:]), dtype=bool)
+
+    # create boolean array if p_val < 0.05
+    markers[p < 0.05] = True
+
+    return markers
+
+
+def aggregate_gains(trial_numbers, sensors, controls, num_gains, event,
+                    structure, scale_by_mass=False):
+    """
+    Parameters
+    ==========
+    trial_numbers : list of strings
+        The trial numbers that the means should be computed for.
+    sensors : list of strings
+    controls : list of strings
+    num_gains : int
+        Number of gains computed.
+    event : string
+    structure : string
+
+    """
+
+    data_dir = config_paths()['processed_data_dir']
+
+    sub_tab_path = os.path.join(data_dir, 'subject_table.h5')
+    mass_tab = pd.read_hdf(sub_tab_path, 'subject_table')
+
+    all_gains = np.zeros((len(trial_numbers),
+                          num_gains,
+                          len(controls),
+                          len(sensors)))
+
+    all_var = np.zeros((len(trial_numbers),
+                        num_gains,
+                        len(controls),
+                        len(sensors)))
+
+    for i, trial_number in enumerate(trial_numbers):
+        file_name_template = '{}-{}.npz'
+        file_name = file_name_template.format(trial_number, event)
+        gain_data_npz_path = os.path.join(data_dir, 'gains', structure,
+                                          file_name)
+
+        subject_id = Trial(trial_number).meta_data['trial']['subject-id']
+        mass = mass_tab['Measured Mass'].loc[subject_id]
+
+        with np.load(gain_data_npz_path) as npz:
+            # n, q, p
+            if scale_by_mass:
+                all_gains[i] = npz['arr_0'] / mass
+                all_var[i] = npz['arr_3'] / mass
+            else:
+                all_gains[i] = npz['arr_0']
+                all_var[i] = npz['arr_3']
+
+    return all_gains
 
 
 def mean_gains(trial_numbers, sensors, controls, num_gains, event,

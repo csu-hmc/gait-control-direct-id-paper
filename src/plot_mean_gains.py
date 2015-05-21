@@ -35,16 +35,24 @@ def main(event, structure):
 
     for speed, trial_numbers in similar_trials.items():
 
-        mean_gains, var_gains = utils.mean_gains(
-            trial_numbers, utils.Trial.sensors, utils.Trial.controls,
-            utils.Trial.num_cycle_samples, file_name_safe_event,
-            file_name_safe_structure, scale_by_mass=True)
+        all_gains = utils.aggregate_gains(trial_numbers,
+                                          utils.Trial.sensors,
+                                          utils.Trial.controls,
+                                          utils.Trial.num_cycle_samples,
+                                          file_name_safe_event,
+                                          file_name_safe_structure,
+                                          scale_by_mass=True)
+
+        mean_gains = all_gains.mean(axis=0)
+        var_gains = all_gains.var(axis=0)
 
         mean_gains_per_speed[speed] = mean_gains
 
+        markers = utils.mark_if_sig_diff_than(all_gains)
+
         fig, axes = utils.plot_joint_isolated_gains(
             utils.Trial.sensors, utils.Trial.controls, mean_gains,
-            gains_std=np.sqrt(var_gains), mass=1.0)
+            gains_std=np.sqrt(var_gains), mass=1.0, mark=markers)
 
         fig.set_size_inches((14.0, 14.0))
         fig.savefig(os.path.join(plot_dir, 'mean-gains-' + speed + '.png'),
