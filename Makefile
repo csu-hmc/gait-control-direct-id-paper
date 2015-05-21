@@ -1,3 +1,4 @@
+all: pdf clean
 pdf:
 	pdflatex -shell-escape main.tex
 	bibtex main.aux
