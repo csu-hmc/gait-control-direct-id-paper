@@ -440,35 +440,50 @@ def load_sensors_and_controls():
     return Trial.sensors, Trial.controls
 
 
-def plot_joint_isolated_gains(sensors, actuators, gains, gains_std,
+def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
                               mass=None, gait_cycle=None, axes=None,
-                              show_gain_std=True, linestyle='-'):
-    """Plots either a 3 x 3 or 2 x 3 subplot where the columns corresond
-    to a joint (ankle, knee, hip). The top show shows the proportional
-    gain plots and the bottom row shows the derivative gain plots. The
-    optional middle row plots the mean angle and angular rate.
+                              linestyle='-'):
+    """Plots either a 3 x 3 or 2 x 3 subplot where the columns corresond to
+    a joint (ankle, knee, hip). The top show shows the proportional gain
+    plots and the bottom row shows the derivative gain plots. The optional
+    middle row plots the mean angle and angular rate.
 
     Parameters
     ==========
     sensors : list of strings
+        The p sensors that correspond to the gain matrix.
     actuators : list of strings
-    gains : ndarray
-    gains_std : ndarray
-    mass : float
+        The q actuators that correspond to the gain matrix.
+    gains : ndarray, shape(n, p, q)
+        The n gain matrices.
+    gains_std : ndarray, shape(n, p, q), optional, default=None
+        The standard deviation of each gain.
+    mass : float, optional, default=None
         If a mass is supplied the gains will be scaled by the mass.
-    gait_cycles : pandas.DataFrame
+    gait_cycles : pandas.DataFrame, optional, default=None
         If gait cycles are supplied, a middle row with the mean gait cycles
         will be plotted.
-    axes :
-    show_gain_std : boolean
-        If true, the standard deviation of the gains with respect to the
-        fit variance will be shown.
-    linestyle :
+    axes : matplotlib.Axes, optional, default=None
+        An axes to plot to.
+    linestyle : string, optional, default='-'
+        Valid matplotlib linestyles.
+
+    Returns
+    =======
+    fig : matplotlib.Figure
+        The figure.
+    axes : ndarray
+        The array of matplotlib.Axes.
 
     """
 
     percent_of_gait_cycle = np.linspace(0.0, 1.0 - 1.0 / gains.shape[0],
                                         num=gains.shape[0])
+    if gains_std is None:
+        gains_std = np.zeros_like(gains)
+        show_std = False
+    else:
+        show_std = True
 
     if mass is None:
         unit_mod = ''
@@ -529,7 +544,7 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std,
         return gains_per, sigma, percent_of_gait_cycle
 
     def _plot_gains():
-        if show_gain_std:
+        if show_std:
             axes[i, j].fill_between(percent_of_gait_cycle,
                                     gains_per - sigma,
                                     gains_per + sigma,
@@ -1489,8 +1504,12 @@ class Trial(object):
         """
 
         gains = self.identification_results[event][structure][0].copy()
-        gains_variance = self.identification_results[event][structure][3].copy()
-        gains_std = np.sqrt(gains_variance)
+
+        if show_gain_std:
+            gains_variance = self.identification_results[event][structure][3].copy()
+            gains_std = np.sqrt(gains_variance)
+        else:
+            gains_std = None
 
         if normalize:
             mass, _ = self.subject_mass()
@@ -1506,11 +1525,13 @@ class Trial(object):
 
             mean_gait_cycle = gait_cycles.mean(axis='items')
 
-        fig, axes = plot_joint_isolated_gains(self.sensors, self.actuators,
-                                              gains, gains_std, mass=mass,
+        fig, axes = plot_joint_isolated_gains(self.sensors,
+                                              self.actuators,
+                                              gains,
+                                              gains_std=gains_std,
+                                              mass=mass,
                                               gait_cycle=mean_gait_cycle,
                                               axes=axes,
-                                              show_gain_std=show_gain_std,
                                               linestyle=linestyle)
         return fig, axes
 

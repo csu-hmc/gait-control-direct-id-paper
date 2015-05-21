@@ -44,7 +44,7 @@ def main(event, structure):
 
         fig, axes = utils.plot_joint_isolated_gains(
             utils.Trial.sensors, utils.Trial.controls, mean_gains,
-            np.sqrt(var_gains), mass=1.0)
+            gains_std=np.sqrt(var_gains), mass=1.0)
 
         fig.set_size_inches((14.0, 14.0))
         fig.savefig(os.path.join(plot_dir, 'mean-gains-' + speed + '.png'),
@@ -59,9 +59,8 @@ def main(event, structure):
         fig, axes = utils.plot_joint_isolated_gains(utils.Trial.sensors,
                                                     utils.Trial.controls,
                                                     mean_gains_per_speed[speed],
-                                                    np.sqrt(var_gains),
+                                                    gains_std=np.sqrt(var_gains),
                                                     axes=axes,
-                                                    show_gain_std=False,
                                                     linestyle=linestyle)
     axes[0, 0].legend().set_visible(False)
     right_labels = ['Right ' + speed + ' [m/s]' for speed in speeds]

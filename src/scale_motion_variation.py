@@ -49,7 +49,7 @@ for scale in np.linspace(0.0, 0.02, num=11):
     fig, axes = utils.plot_joint_isolated_gains(trial.sensors,
                                                 trial.actuators,
                                                 gain_matrices,
-                                                np.sqrt(gain_matrices_variance))
+                                                gains_std=np.sqrt(gain_matrices_variance))
 
 
 
