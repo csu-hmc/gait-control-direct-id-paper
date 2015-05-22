@@ -555,7 +555,7 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
 
         return gains_per, sigma, mark_per, percent_of_gait_cycle
 
-    def _plot_gains(markevery):
+    def _plot_gains(markevery, not_sig):
         if show_std:
             axes[i, j].fill_between(percent_of_gait_cycle,
                                     gains_per - sigma,
@@ -569,6 +569,11 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
         axes[i, j].plot(percent_of_gait_cycle, gains_per, marker='o', ms=4,
                         color=color, label=side, linestyle=linestyle,
                         markevery=markevery)
+
+        if not_sig is not None:
+            axes[i, j].plot(percent_of_gait_cycle, gains_per, marker='o',
+                            ms=4, color='black', label="_nolegend_",
+                            linestyle='None', markevery=not_sig)
 
         if plt.rcParams['text.usetex']:
             title_template = r"{}: {} $\rightarrow$ Moment"
@@ -637,13 +642,16 @@ def plot_joint_isolated_gains(sensors, actuators, gains, gains_std=None,
 
                     if markevery is not None:
                         markevery, = np.nonzero(mark_per)
+                        not_sig, = np.nonzero(np.invert(mark_per))
+                    else:
+                        not_sig = None
 
                     if side == 'Left':
                         gains_per, sigma, mark_per, percent_of_gait_cycle = \
                             _shift_gains(gains_per, sigma, mark_per,
                                          percent_of_gait_cycle)
 
-                    _plot_gains(markevery)
+                    _plot_gains(markevery, not_sig)
 
                 elif row == 'Trajectory' and side == 'Right':
 
