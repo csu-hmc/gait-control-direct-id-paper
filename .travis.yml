@@ -7,7 +7,7 @@ env:
     - secure: "MFme99wquHpg2zo9pmguHwr6ZHG09gOLRMmV/e4LUGPXfIy9TJtqnoUYmupB2yZDnTHZ+CXH4tuQALViXOGeIXmLZsAEaMvbdd6M8b+evkWbalR8QjDr2kB9BdTRknP1jKKm23WHKyOVHU6ZBs9YMsbvRmPDeFXi7bmL8Nzw1j4="
 before_install:
   - sudo apt update
-  - sudo apt install -y texlive texlive-latex-extra biber
+  - sudo apt install -y texlive texlive-latex-extra texlive-science
   - pip install doctr
 script:
   - set -e
