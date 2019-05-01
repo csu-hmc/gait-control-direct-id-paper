@@ -1,0 +1,22 @@
+language: python
+python:
+  - "3.6"
+env:
+  global:
+    # Doctr deploy key for csu-hmc/gait-control-direct-id-paper
+    - secure: "MFme99wquHpg2zo9pmguHwr6ZHG09gOLRMmV/e4LUGPXfIy9TJtqnoUYmupB2yZDnTHZ+CXH4tuQALViXOGeIXmLZsAEaMvbdd6M8b+evkWbalR8QjDr2kB9BdTRknP1jKKm23WHKyOVHU6ZBs9YMsbvRmPDeFXi7bmL8Nzw1j4="
+before_install:
+  - sudo apt update
+  - sudo apt install -y texlive texlive-latex-extra biber
+  - pip install doctr
+script:
+  - set -e
+  - make
+  - mkdir output
+  - mv main.pdf output/
+  - if [[ -z "$TRAVIS_TAG" ]]; then
+      DEPLOY_DIR=".";
+    else
+      DEPLOY_DIR="$TRAVIS_TAG";
+    fi
+  - doctr deploy --build-tags --built-docs output/ $DEPLOY_DIR
