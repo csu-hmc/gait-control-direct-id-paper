@@ -49,7 +49,7 @@ Recent research and commercial activity indicate that gait-related powered
 prosthetics will play an important role in both assisting humans with
 disabilities and enhancing the abilities of the able bodied. These devices
 include a variety of sensors and actuators than can be coupled to a control
-system to provide assisted gait. There are currently commericial version of
+system to provide assisted gait. There are currently commercial version of
 powered trasnfemoral leg prostheses \cite{BiOM} and lower extremity exoskeleton
 \cite{ReWalk} and many products still in the research phase
 \cite{Ekso,Parker,Goldfarb,etc} that hope to increase the mobility of the
@@ -63,12 +63,12 @@ giving promising results in simulated musculoskeletal systems \cite{Wang2012,
 Geitenbeek2013} these controllers still only produce marginally stable
 simulations.
 
-Even though constraining the controller to rudimentary models of the musculo
-skeleteal system is fruitful, we are curious if more generic control structures
-can reveal more robust controllers. To improve the gait of powered prosthetics,
-our intent is to identify a simple, linear controller from a large set of data
-collected from able-bodied subjects being perturbed by random longitudinal
-forces.
+Even though constraining the controller to rudimentary models of the
+musculoskeleteal system is fruitful, we are curious if more generic control
+structures can reveal more robust controllers. To improve the gait of powered
+prosthetics, our intent is to identify a simple, linear controller from a large
+set of data collected from able-bodied subjects being perturbed by random
+longitudinal forces.
 
 We pose our problem as such: given a ``human-like'' plant, i.e. one with
 similar degrees of freedom and inertial properties to a human, that is actuated
@@ -86,11 +86,11 @@ controller for a powered transfemoral prosthesis. The control law that
 generates the desired joint torques is based on three constants and a desired
 angle set point for each of the four modes of a gait cycle. They found the
 values of the controller by fitting their controller to normative joint angle,
-angular rate, and torque estimates from a single gait cylce from an able bodied
+angular rate, and torque estimates from a single gait cycle from an able bodied
 walker. This method is unlikely to actually identify a true controller due
 to the inherent errors expounded by \cite{Rouse2013} but may have merit as
 \cite{Rouse2014} found quasi-stiffness to be equivalent to stiffness. The
-authors ended up hand tuning their ontroller based on user feel leaving them
+authors ended up hand tuning their controller based on user feel leaving them
 with a controller that was less than data driven.
 
 \todo[inline]{Add in a description of Hugh Herr's BiOM controller}
@@ -107,14 +107,14 @@ relationship for stiffness with respect to 20-70\% phase.
 More recently \cite{Wang2014} uses a simpler approach and is able to predict
 foot placement with a simple linear model derived from kinematic data that
 relates the mid-stance pelvic state to the following foot location. This is
-questionble though, as there is no way to show that this is a control mechanism
-and not simply a mechanical relationship. This analsyse was performed without
-external perturbatiosn suggesting that the walker self-perturbs enough to glean
+questionable though, as there is no way to show that this is a control mechanism
+and not simply a mechanical correlation. This analyses was performed without
+external perturbations suggesting that the walker self-perturbs enough to glean
 results.
 
 We approach this ``control'' identification problem in a similar fashion as
 \cite{Rouse2014} but by making use of a much richer data set that has the
-potetional to expose multi-input multi-ouput control mechanisms for the entire
+potential to expose multi-input multi-ouput control mechanisms for the entire
 body. We collect greater than 15,000 gait cycles from 11 subjects walking at
 three nominal speeds on an instrumented treadmill where we measure the
 kinematics of a full body marker set and a full set of ground reaction loads at
@@ -215,19 +215,19 @@ We assume a black box~\footnote{black box in the system identification sense,
 i.e. there are parameters in the model} control structure for the closed loop
 system, Figure~\ref{fig:controller}. We first assume there is an unknown
 non-linear plant, i.e. the open loop musculoskeletal system and treadmill, that
-has an uknown time varying state. This plant can be perturbed by an external
+has an unknown time varying state. This plant can be perturbed by an external
 exogenous input $w(t)$, in our case by varying belt speed, and is also driven
 by joint torques $\mathbf{m}(t)$. An unknown sensor model generates feedback
-signals, $\mathbf{s}(t)$, that are compared to a nomimal gait phase dependent
+signals, $\mathbf{s}(t)$, that are compared to a nominal gait phase dependent
 reference trajectory $\mathbf{s}_0(\varphi)$ that describes the gait phase
 varying state for cyclic gait when no feedback is necessary. The error in these
 sensors are fed into the controller which generate corrective joint torques
-that are added to the nomimal gait phase dependent joint torques
+that are added to the nominal gait phase dependent joint torques
 $\mathbf{m}_0(\varphi)$ that correspond to the nominal trajectories,
 $\mathbf{s}_0(\varphi)$. We then assume that when the actual state deviates
 from the nominal state trajectory that the controller computes additive joint
-torques based on the state tractory error to compensate for variation in gait
-away from the nomimal.
+torques based on the state trajectory error to compensate for variation in gait
+away from the nominal.
 
 The controller is designated as a gait phase scheduled gain matrix, $\K$, that
 relates the error in the state trajectories to the additive joint torques. The
@@ -251,7 +251,7 @@ passive control gains with the active ones in addition to any other unmodeled
 effects. Other authors refer to these gains as the impedance stiffness and
 damping. This is desirable for our intentions, as we are only concerned with
 mapping this identified controller to that of powered prosthetic device and it
-is thuse unnessary to distinguish between these.
+is thus unnecessary to distinguish between these.
 
 \subsection*{Direct Identification}
 %
