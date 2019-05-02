@@ -3,19 +3,14 @@ Introduction
 
 This is the source repository for the paper:
 
-   Moore, J.K. and van den Bogert, A. " Direct Identification of Human Gait
+   Moore, J.K. and van den Bogert, A. "Direct Identification of Human Gait
    Control", 2015.
 
-This repository contains or links to all of the information needed to reproduce
-the results in the paper.
+The files in this repository can be used to reproduce the results in the paper.
 
-The latest rendered version of the PDF can be viewed via the ShareLaTeX_ CI
-system:
+The latest rendered version of the PDF can be viewed at:
 
-.. image:: https://www.sharelatex.com/github/repos/csu-hmc/gait-control-direct-id-paper/builds/latest/badge.svg
-   :target: https://www.sharelatex.com/github/repos/csu-hmc/gait-control-direct-id-paper/builds/latest/output.pdf
-
-.. _ShareLaTeX: http://sharelatex.com
+https://csu-hmc.github.io/gait-control-direct-id/main.pdf
 
 License
 =======
