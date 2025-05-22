@@ -52,10 +52,10 @@ def config_paths():
 
     try:
         with open(os.path.join(root_dir, 'config.yml'), 'r') as f:
-            config = yaml.load(f)
+            config = yaml.load(f, Loader=yaml.SafeLoader)
     except IOError:
         with open(os.path.join(root_dir, 'default-config.yml'), 'r') as f:
-            config = yaml.load(f)
+            config = yaml.load(f, Loader=yaml.SafeLoader)
 
     paths = {}
     for name, dir_name in config.items():
@@ -244,7 +244,7 @@ def generate_meta_data_tables(trials_dir, top_level_key='TOP', key_sep='|'):
             print('No meta file in {}'.format(directory))
             pass
         else:
-            meta_data = yaml.load(f)
+            meta_data = yaml.load(f, Loader=yaml.SafeLoader)
             flattened_dict = walk_dict(meta_data, top_level_key, key_sep)
             all_flattened_meta_data[trial_num] = flattened_dict
             for table_name, table_row_dict in flattened_dict.items():
@@ -412,7 +412,7 @@ def measured_subject_mass(raw_data_dir, processed_data_dir):
 def load_meta_data(meta_file_path):
 
     with open(meta_file_path) as f:
-        meta_data = yaml.load(f)
+        meta_data = yaml.load(f, Loader=yaml.SafeLoader)
 
     return meta_data
 
