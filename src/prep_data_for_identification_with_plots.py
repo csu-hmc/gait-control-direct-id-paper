@@ -50,11 +50,11 @@ def main(event, force):
 
         gait_data = trial.gait_data_objs[event]
 
-        axes = gait_data.gait_cycle_stats.hist()
-        fig = plt.gcf()
-        fig.savefig(os.path.join(hist_dir, trial_number + '-' + event_fname
-                                 + '.png'), dpi=300)
-        plt.close(fig)
+        #axes = gait_data.gait_cycle_stats.hist()
+        #fig = plt.gcf()
+        #fig.savefig(os.path.join(hist_dir, trial_number + '-' + event_fname
+                                 #+ '.png'), dpi=300)
+        #plt.close(fig)
 
         axes = plot_gait_cycles(gait_data.gait_cycles, 'FP2.ForY')
         fig = plt.gcf()
